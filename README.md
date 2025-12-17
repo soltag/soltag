@@ -28,7 +28,7 @@ Soltag verifies physical presence through a multi-layered approach:
 *   **Privacy-First Onboarding:** No email, phone number, or social login required. Users simply connect their Solana wallet.
 *   **Hardware Integration:** Fully optimized for **Solana Seeker**, utilizing the Seed Vault for signing and the Secure Element for device attestation to prevent bot farming.
 *   **Offline Support:** Built with an "Offline First" architecture. Users can scan and verify codes even with spotty connectivity; transactions are queued and submitted when online.
-*   **Modern UI:** A sleek, high-performance interface built with React and Ionic/Capacitor, featuring Dark Mode and glassmorphism transparency effects.
+*   **Modern UI:** A sleek, high-performance interface built with React and Ionic/Capacitor, featuring Dark Mode and glassmorphism transparency effects using **Lucide React** icons.
 
 ### Leaderboard & Reputation
 *   **Global Rankings:** Users gain reputation points for every verified event, competing on global and monthly leaderboards.
@@ -47,14 +47,14 @@ Soltag verifies physical presence through a multi-layered approach:
 
 | Feature | SOLTAG |
 | :--- | :--- |
-| **Blockchain** | **Solana** |
+| **Blockchain** | ![Solana](https://img.shields.io/badge/Solana-9945FF?style=flat&logo=Solana&logoColor=white) |
 | **Fees** | **Ultra-low (~$0.00001)** via Compressed NFTs |
 | **Mobile-First** | **Native Android/Saga** |
 | **GPS Privacy** | **Hashed & Local-Only** |
 | **Hardware Attestation** | **Seeker ID Integration** |
 | **Offline Support** | **Queue System** |
 | **Soulbound** | **Enforced On-Chain** |
-| **Open Source** | **MIT License** |
+| **Open Source** | ![MIT](https://img.shields.io/badge/License-MIT-blue.svg) |
 
 ---
 
@@ -75,20 +75,18 @@ Built natively for the Solana Mobile ecosystem:
 ## Tech Stack
 
 **Frontend**
-*   React 18
-*   TypeScript
-*   Vite
-*   Capacitor (Android Runtime)
-*   Lucide React (Iconography)
+![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
+![Capacitor](https://img.shields.io/badge/Capacitor-1199EE?style=flat&logo=capacitor&logoColor=white)
 
 **Solana Integration**
-*   @solana/web3.js
-*   @solana-mobile/mobile-wallet-adapter-protocol
-*   Anchor Framework (Smart Contract Logic)
+![Solana](https://img.shields.io/badge/Solana-9945FF?style=flat&logo=Solana&logoColor=white)
+![Phantom](https://img.shields.io/badge/Phantom-AB9FF2?style=flat&logo=phantom&logoColor=white)
 
 **Security**
-*   Web Crypto API (AES-GCM)
-*   Ed25519 Signature Verification
+![WebCrypto](https://img.shields.io/badge/Web_Crypto_API-323330?style=flat&logo=javascript&logoColor=F7DF1E)
+![ED25519](https://img.shields.io/badge/Ed25519-Security-green)
 
 ---
 
@@ -129,7 +127,7 @@ cd android && ./gradlew assembleDebug
 
 ## Roadmap
 
-*   **Phase 1 (Complete):** Core Mobile App, Offline Queueing, Basic Security Layer.
+*   **Phase 1 (Complete):** Mobile App, Offline Queueing, Basic Security Layer.
 *   **Phase 2 (Current):** Seeker Hardware Integration, Global Leaderboards.
 *   **Phase 3 (Next):** Anchor Program Deployment (Devnet/Mainnet), Metaplex Compressed NFT Integration.
 
