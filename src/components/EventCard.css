@@ -1,0 +1,144 @@
+.event-card {
+    display: flex;
+    gap: var(--spacing-md);
+    background: var(--color-card-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.event-card:hover {
+    background: var(--color-card-hover);
+    transform: translateY(-2px);
+}
+
+.event-image {
+    position: relative;
+    width: 100px;
+    height: 80px;
+    flex-shrink: 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.event-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.event-image-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--color-bg-tertiary), var(--color-bg-accent));
+}
+
+.event-attended-badge {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: var(--color-success);
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+}
+
+.event-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.event-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+}
+
+.event-title {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.event-bookmark {
+    padding: 4px;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.event-bookmark:hover {
+    color: var(--color-text-secondary);
+}
+
+.event-bookmark.active {
+    color: var(--color-accent-orange);
+}
+
+.event-datetime {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.event-location {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.event-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+    padding-top: var(--spacing-xs);
+}
+
+.event-organizer {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.event-status {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+}
+
+.event-status.active {
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--color-success);
+}
+
+.event-status.upcoming {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--color-info);
+}
+
+.event-status.past {
+    background: var(--color-card-bg);
+    color: var(--color-text-muted);
+}

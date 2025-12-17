@@ -1,0 +1,39 @@
+.wallet-button {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    width: 100%;
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: transparent;
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-full);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.wallet-button:hover:not(:disabled) {
+    background: var(--color-card-bg);
+    border-color: var(--color-text-muted);
+}
+
+.wallet-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.wallet-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.wallet-name {
+    flex: 1;
+    text-align: left;
+}

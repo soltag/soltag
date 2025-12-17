@@ -1,0 +1,109 @@
+.onboarding-screen {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: var(--spacing-xl);
+    position: relative;
+    overflow: hidden;
+}
+
+.onboarding-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-2xl) 0;
+    z-index: 1;
+}
+
+.onboarding-icon {
+    width: 120px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-xl);
+    color: var(--color-text-primary);
+}
+
+.onboarding-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-xl);
+}
+
+.onboarding-title {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.onboarding-description {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    max-width: 320px;
+    margin: 0;
+}
+
+/* Pagination */
+.onboarding-pagination {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xl);
+    z-index: 1;
+}
+
+.pagination-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text-muted);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    padding: 0;
+}
+
+.pagination-dot.active {
+    width: 24px;
+    border-radius: var(--radius-full);
+    background: var(--color-text-primary);
+}
+
+/* Controls */
+.onboarding-controls {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    z-index: 1;
+}
+
+.onboarding-controls .btn {
+    flex: 1;
+}
+
+/* Background decoration */
+.onboarding-decoration {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.decoration-glow {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.15), transparent 70%);
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+}
