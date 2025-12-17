@@ -421,17 +421,17 @@ SOLTAG proves quorum without revealing GPS
 
 ## 🆚 Differentiation vs Alternatives
 
-| Feature | POAP | Attendance.xyz | **SOLTAG** |
-|---------|------|----------------|-----------|
-| **Blockchain** | Ethereum | Polygon | **Solana** |
-| **Fees** | High (~$5) | Medium (~$0.50) | **Ultra-low (~$0.00001)** |
-| **Mobile-First** | ❌ | Partial | **✅ Native** |
-| **GPS Privacy** | ❌ Public | ❌ Public | **✅ Hashed** |
-| **Hardware Attestation** | ❌ | ❌ | **✅ Seeker ID** |
-| **Offline Support** | ❌ | ❌ | **✅ Queue** |
-| **Soulbound** | ❌ Transferable | ✅ | **✅ Enforced** |
-| **Compressed NFTs** | ❌ | ❌ | **✅ Bubblegum** |
-| **Open Source** | Partial | ❌ | **✅ MIT** |
+| Feature | **SOLTAG** |
+|---------|-----------|
+| **Blockchain** | **Solana** |
+| **Fees** | **Ultra-low (~$0.00001)** |
+| **Mobile-First** | **✅ Native** |
+| **GPS Privacy** | **✅ Hashed** |
+| **Hardware Attestation** | **✅ Seeker ID** |
+| **Offline Support** | **✅ Queue** |
+| **Soulbound** | **✅ Enforced** |
+| **Compressed NFTs** | **✅ Bubblegum** |
+| **Open Source** | **✅ MIT** |
 
 **Why SOLTAG:**
 - **Cheapest:** Solana fees vs Ethereum gas
