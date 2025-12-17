@@ -1,5 +1,9 @@
 # SOLTAG - Proof of Presence on Solana
 
+[![Built for Solana Mobile](https://img.shields.io/badge/Built_for-Solana_Mobile-9945FF?style=for-the-badge&logo=solana&logoColor=white)](https://solanamobile.com)
+[![Seeker Ready](https://img.shields.io/badge/Optimized_for-Solana_Seeker-00FA9A?style=for-the-badge&logo=android&logoColor=black)](https://solanamobile.com/seeker)
+[![DApp Store](https://img.shields.io/badge/Download-Solana_dApp_Store-black?style=for-the-badge&logo=google-play&logoColor=white)](https://dappstore.solana.com)
+
 **Your on-chain proof of real-world attendance**
 
 SOLTAG is a privacy-first mobile dApp that mints non-transferable NFT credentials (Soulbound Tokens) to prove you attended real-world events. It achieves this without strictly tracking users or storing raw GPS coordinates on-chain, ensuring complete user privacy.
