@@ -1,10 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Copy, CheckCircle, Download, LogOut, Edit2, Camera, X } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import CredentialCard from '../components/CredentialCard';
-import { mockCredentials, shortenAddress } from '../data/mockData';
+import { ledgerService } from '../services/ledgerService';
+import { shortenAddress } from '../data/mockData';
+import type { Credential } from '../types';
 import './ProfileScreen.css';
 
 type Filter = 'all' | 'conference' | 'gym' | 'ticket';
@@ -16,6 +18,7 @@ export default function ProfileScreen() {
     // Get real public key if connected, otherwise fallback to stored (or empty)
     const walletAddress = publicKey ? publicKey.toBase58() : localStorage.getItem('soltag_wallet_pubkey') || '';
 
+    const [credentials, setCredentials] = useState<Credential[]>([]);
     const [activeFilter, setActiveFilter] = useState<Filter>('all');
     const [copied, setCopied] = useState(false);
 
@@ -27,7 +30,11 @@ export default function ProfileScreen() {
     const [tempAvatar, setTempAvatar] = useState(avatarUrl);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const filteredCredentials = mockCredentials.filter(c => {
+    useEffect(() => {
+        ledgerService.getCredentials().then(setCredentials);
+    }, []);
+
+    const filteredCredentials = credentials.filter(c => {
         if (activeFilter === 'all') return true;
         return c.category === activeFilter;
     });
@@ -101,10 +108,6 @@ export default function ProfileScreen() {
                                 {getInitials(username)}
                             </div>
                         )}
-                        {/* Seeker badge overlay - commented out until we have real Seeker device */}
-                        {/* <div className="seeker-shield-overlay" title="Seeker Verified">
-                            <Shield size={16} />
-                        </div> */}
                     </div>
                     <div className="profile-user-info">
                         <h2 className="profile-username">{username || 'Anonymous User'}</h2>
@@ -131,11 +134,11 @@ export default function ProfileScreen() {
                 {/* Stats */}
                 <div className="profile-stats animate-slide-up">
                     <div className="stat-card">
-                        <span className="stat-value">{mockCredentials.length}</span>
+                        <span className="stat-value">{credentials.length}</span>
                         <span className="stat-label">Attendances</span>
                     </div>
                     <div className="stat-card">
-                        <span className="stat-value">{mockCredentials.length * 10}</span>
+                        <span className="stat-value">{credentials.length * 10}</span>
                         <span className="stat-label">Reputation</span>
                     </div>
                     <div className="stat-card">

@@ -1,27 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RefreshCw, Trash2, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { mockQueueItems, formatDateTime } from '../data/mockData';
+import { formatDateTime } from '../data/mockData';
 import type { QueueItem } from '../types';
 import './OfflineQueueScreen.css';
+import { loadOfflineQueue, updateQueueItem, removeFromQueue } from '../services/offlineQueue';
 
 export default function OfflineQueueScreen() {
-    const [queueItems, setQueueItems] = useState<QueueItem[]>(mockQueueItems);
+    const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
     const [isOnline] = useState(true); // Simulated
 
-    const handleRetry = (itemId: string) => {
+    useEffect(() => {
+        const fetchQueue = async () => {
+            const queue = await loadOfflineQueue();
+            setQueueItems(queue);
+        };
+        fetchQueue();
+    }, []);
+
+    const handleRetry = async (itemId: string) => {
+        const item = queueItems.find(i => i.id === itemId);
+        if (!item) return;
+
+        const updates = { status: 'pending' as const, retries: item.retries + 1 };
+        await updateQueueItem(itemId, updates);
+
         setQueueItems(items =>
-            items.map(item =>
-                item.id === itemId ? { ...item, status: 'pending', retries: item.retries + 1 } : item
+            items.map(i =>
+                i.id === itemId ? { ...i, ...updates } : i
             )
         );
+
         // Simulate success after delay
-        setTimeout(() => {
-            setQueueItems(items => items.filter(item => item.id !== itemId));
+        setTimeout(async () => {
+            await removeFromQueue(itemId);
+            setQueueItems(items => items.filter(i => i.id !== itemId));
         }, 2000);
     };
 
-    const handleRemove = (itemId: string) => {
+    const handleRemove = async (itemId: string) => {
+        await removeFromQueue(itemId);
         setQueueItems(items => items.filter(item => item.id !== itemId));
     };
 

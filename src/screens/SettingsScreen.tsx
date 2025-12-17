@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ChevronRight, Wallet, Eye, Camera, MapPin, RefreshCw, Code } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronRight, Wallet, Eye, Camera, MapPin, RefreshCw, Code, Fingerprint, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
+import { securityService, SecuritySettings } from '../services/securityService';
 import './SettingsScreen.css';
 
 export default function SettingsScreen() {
@@ -13,8 +14,30 @@ export default function SettingsScreen() {
         locationPermission: true,
     });
 
+    const [security, setSecurity] = useState<SecuritySettings>({
+        biometricsEnabled: false,
+        passcodeEnabled: false,
+        lockOnEntry: false
+    });
+
+    useEffect(() => {
+        securityService.getSettings().then(setSecurity);
+    }, []);
+
     const toggleSetting = (key: keyof typeof settings) => {
         setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const toggleSecurity = async (key: keyof SecuritySettings) => {
+        const newSettings = { ...security, [key]: !security[key] };
+
+        // If enabling passcode and none exists, set a default for demo
+        if (key === 'passcodeEnabled' && newSettings.passcodeEnabled && !newSettings.passcode) {
+            newSettings.passcode = '1234';
+        }
+
+        setSecurity(newSettings);
+        await securityService.saveSettings(newSettings);
     };
 
     return (
@@ -38,6 +61,41 @@ export default function SettingsScreen() {
                             </div>
                             <ChevronRight size={20} className="setting-arrow" />
                         </button>
+                    </div>
+                </section>
+
+                {/* Security section */}
+                <section className="settings-section animate-slide-up">
+                    <h2 className="section-label">Security</h2>
+                    <div className="settings-group">
+                        <div className="setting-item">
+                            <div className="setting-icon">
+                                <Fingerprint size={20} />
+                            </div>
+                            <div className="setting-info">
+                                <span className="setting-title">Biometric Lock</span>
+                                <span className="setting-desc">Use fingerprint to open app</span>
+                            </div>
+                            <button
+                                className={`toggle ${security.biometricsEnabled ? 'active' : ''}`}
+                                onClick={() => toggleSecurity('biometricsEnabled')}
+                                aria-label="Toggle biometrics"
+                            />
+                        </div>
+                        <div className="setting-item">
+                            <div className="setting-icon">
+                                <Lock size={20} />
+                            </div>
+                            <div className="setting-info">
+                                <span className="setting-title">Passcode Lock</span>
+                                <span className="setting-desc">Require 4-digit code</span>
+                            </div>
+                            <button
+                                className={`toggle ${security.passcodeEnabled ? 'active' : ''}`}
+                                onClick={() => toggleSecurity('passcodeEnabled')}
+                                aria-label="Toggle passcode"
+                            />
+                        </div>
                     </div>
                 </section>
 

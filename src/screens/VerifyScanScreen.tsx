@@ -3,11 +3,16 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, CheckCircle, XCircle, Loader2, Clock, MapPin, Shield, AlertTriangle } from 'lucide-react';
 import type { VerificationStatus, QRPayload } from '../types';
 import './VerifyScanScreen.css';
+import { validateQRPayload, loadUsedNonces, recordNonce } from '../services/qrValidator';
+import { verifyZone } from '../services/zone';
+import { mockEvents } from '../data/mockData';
 
 export default function VerifyScanScreen() {
     const navigate = useNavigate();
     const location = useLocation();
+
     const qrPayload = location.state?.qrPayload as QRPayload | undefined;
+    const qrRawData = qrPayload ? JSON.stringify(qrPayload) : '';
 
     const [status, setStatus] = useState<VerificationStatus>({
         signature: 'checking',
@@ -15,6 +20,9 @@ export default function VerifyScanScreen() {
         location: 'checking',
         duplicate: 'checking'
     });
+
+    const [usedNonces, setUsedNonces] = useState<Set<string>>(new Set());
+    const [isNoncesLoaded, setIsNoncesLoaded] = useState(false);
 
     const allPassed =
         status.signature === 'valid' &&
@@ -28,28 +36,65 @@ export default function VerifyScanScreen() {
         status.location === 'mismatch' ||
         status.duplicate === 'duplicate';
 
-    // Simulate verification checks
+    // Load nonces on mount
     useEffect(() => {
-        const timers: ReturnType<typeof setTimeout>[] = [];
-
-        timers.push(setTimeout(() => {
-            setStatus(s => ({ ...s, signature: 'valid' }));
-        }, 800));
-
-        timers.push(setTimeout(() => {
-            setStatus(s => ({ ...s, timeWindow: 'valid' }));
-        }, 1200));
-
-        timers.push(setTimeout(() => {
-            setStatus(s => ({ ...s, location: 'valid' }));
-        }, 1800));
-
-        timers.push(setTimeout(() => {
-            setStatus(s => ({ ...s, duplicate: 'clear' }));
-        }, 2200));
-
-        return () => timers.forEach(clearTimeout);
+        loadUsedNonces().then((nonces) => {
+            setUsedNonces(nonces);
+            setIsNoncesLoaded(true);
+        });
     }, []);
+
+    // Real verification checks
+    useEffect(() => {
+        let isCancelled = false;
+
+        const performVerification = async () => {
+            if (!qrRawData || !isNoncesLoaded) return;
+
+            // 1. Validate QR (Signature, Time, Nonce)
+            const trustedKeys = mockEvents.map(e => e.event_pubkey);
+            const result = await validateQRPayload(qrRawData, trustedKeys, usedNonces);
+
+            if (isCancelled) return;
+
+            setStatus(s => ({
+                ...s,
+                signature: result.signature,
+                timeWindow: result.timeWindow,
+                duplicate: result.duplicate
+            }));
+
+            // 2. Validate Location (Zone)
+            if (result.payload) {
+                const zoneResult = await verifyZone([result.payload.zone_code]);
+                if (isCancelled) return;
+
+                const locationStatus = zoneResult.status === 'valid' ? 'valid' : 'mismatch';
+                setStatus(s => ({
+                    ...s,
+                    location: locationStatus
+                }));
+
+                // 3. If all passed, record the nonce
+                if (
+                    result.signature === 'valid' &&
+                    result.timeWindow === 'valid' &&
+                    result.duplicate === 'clear' &&
+                    locationStatus === 'valid'
+                ) {
+                    await recordNonce(result.payload.nonce, usedNonces);
+                }
+            } else {
+                setStatus(s => ({ ...s, location: 'mismatch' }));
+            }
+        };
+
+        performVerification();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [qrRawData, isNoncesLoaded, usedNonces]);
 
     const handleProceed = () => {
         navigate('/confirm', { state: { qrPayload } });

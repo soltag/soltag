@@ -1,16 +1,34 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QrCode, ChevronRight, Trophy, Sparkles } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import CredentialCard from '../components/CredentialCard';
 import EventCard from '../components/EventCard';
-import { mockCredentials, mockEvents, getEventStatus } from '../data/mockData';
+import { ledgerService } from '../services/ledgerService';
+import { getEventStatus } from '../data/mockData';
+import type { Credential, Event } from '../types';
 import './HomeScreen.css';
 
 export default function HomeScreen() {
     const navigate = useNavigate();
 
-    const recentCredentials = mockCredentials.slice(0, 3);
-    const nearbyEvents = mockEvents.filter(e => getEventStatus(e) !== 'past').slice(0, 3);
+    const [credentials, setCredentials] = useState<Credential[]>([]);
+    const [events, setEvents] = useState<Event[]>([]);
+
+    useEffect(() => {
+        const loadData = async () => {
+            const [creds, evts] = await Promise.all([
+                ledgerService.getCredentials(),
+                ledgerService.getEvents()
+            ]);
+            setCredentials(creds);
+            setEvents(evts);
+        };
+        loadData();
+    }, []);
+
+    const recentCredentials = credentials.slice(0, 3);
+    const nearbyEvents = events.filter(e => getEventStatus(e) !== 'past').slice(0, 3);
 
     const handleScanClick = () => {
         navigate('/scan');

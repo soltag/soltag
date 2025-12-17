@@ -1,14 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import EventCard from '../components/EventCard';
-import { mockEvents, getEventStatus } from '../data/mockData';
+import { ledgerService } from '../services/ledgerService';
+import { getEventStatus } from '../data/mockData';
+import type { Event } from '../types';
 import './EventsListScreen.css';
 
 type Filter = 'nearby' | 'upcoming' | 'past' | 'bookmarked';
 
 export default function EventsListScreen() {
     const [activeFilter, setActiveFilter] = useState<Filter>('nearby');
-    const [events, setEvents] = useState(mockEvents);
+    const [events, setEvents] = useState<Event[]>([]);
+
+    useEffect(() => {
+        ledgerService.getEvents().then(setEvents);
+    }, []);
 
     const filteredEvents = events.filter(event => {
         const status = getEventStatus(event);

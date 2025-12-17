@@ -7,6 +7,9 @@
  */
 
 import type { QRPayload, VerificationStatus } from '../types';
+import { ed25519 } from '@noble/curves/ed25519';
+import bs58 from 'bs58';
+import { secureGetJSON, secureSetJSON, STORAGE_KEYS } from '../storage/secureStorage';
 
 // Validation result type
 export interface ValidationResult {
@@ -106,9 +109,6 @@ function validateSchema(payload: unknown): { valid: boolean; errors: string[] } 
 
 /**
  * Verify Ed25519 signature of QR payload
- * 
- * NOTE: In production, use a proper Ed25519 library like @noble/ed25519
- * This is a placeholder that shows the expected implementation pattern.
  */
 export async function verifySignature(
     payload: QRPayload,
@@ -119,27 +119,22 @@ export async function verifySignature(
         return { valid: false, error: 'Event authority not in trusted registry' };
     }
 
-    // Note: In production, build message with buildSignatureMessage(payload)
-    // and verify with @noble/ed25519
-
     try {
-        // In production, implement actual Ed25519 verification:
-        // import { verify } from '@noble/ed25519';
-        // const isValid = await verify(
-        //   hexToBytes(payload.sig),
-        //   new TextEncoder().encode(message),
-        //   hexToBytes(payload.event_pubkey)
-        // );
+        const message = buildSignatureMessage(payload);
+        const messageBytes = new TextEncoder().encode(message);
 
-        // Placeholder for demo - always returns true
-        // SECURITY: Replace with actual verification in production!
-        console.warn('[SECURITY] Using placeholder signature verification - implement real Ed25519 in production');
+        const signatureBytes = bs58.decode(payload.sig);
+        const publicKeyBytes = bs58.decode(payload.event_pubkey);
 
-        // Simulate async verification
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const isValid = ed25519.verify(signatureBytes, messageBytes, publicKeyBytes);
+
+        if (!isValid) {
+            return { valid: false, error: 'Invalid signature' };
+        }
 
         return { valid: true };
     } catch (error) {
+        console.error('[Security] Signature verification error:', error);
         return { valid: false, error: 'Signature verification failed' };
     }
 }
@@ -195,18 +190,39 @@ export function checkNonceReplay(
 }
 
 /**
+ * Persistence: Load used nonces from secure storage
+ */
+export async function loadUsedNonces(): Promise<Set<string>> {
+    const stored = await secureGetJSON<string[]>(STORAGE_KEYS.USED_NONCES);
+    if (stored) {
+        return new Set(stored);
+    }
+    return new Set();
+}
+
+/**
+ * Persistence: Save used nonces to secure storage
+ */
+export async function saveUsedNonces(nonces: Set<string>): Promise<void> {
+    const arr = Array.from(nonces);
+    await secureSetJSON(STORAGE_KEYS.USED_NONCES, arr);
+}
+
+/**
  * Store a used nonce to prevent replay
  */
-export function recordNonce(nonce: string, usedNonces: Set<string>): void {
+export async function recordNonce(nonce: string, usedNonces: Set<string>): Promise<void> {
     usedNonces.add(nonce);
 
     // Limit set size to prevent memory issues
-    if (usedNonces.size > 10000) {
-        // Remove oldest entries (convert to array, slice, recreate set)
+    if (usedNonces.size > 1000) {
+        // Remove oldest entries
         const arr = Array.from(usedNonces);
         usedNonces.clear();
-        arr.slice(-5000).forEach(n => usedNonces.add(n));
+        arr.slice(-500).forEach(n => usedNonces.add(n));
     }
+
+    await saveUsedNonces(usedNonces);
 }
 
 /**

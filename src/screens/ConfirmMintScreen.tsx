@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { ArrowLeft, Award, Shield, Clock, Hash, Wallet } from 'lucide-react';
 import { getSeekerBadgeStatus } from '../services/seekerID';
 import type { QRPayload } from '../types';
@@ -8,9 +9,17 @@ import './ConfirmMintScreen.css';
 export default function ConfirmMintScreen() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { publicKey } = useWallet();
     const qrPayload = location.state?.qrPayload as QRPayload | undefined;
     const [isSeekerVerified, setIsSeekerVerified] = useState(false);
     const [seekerBadge, setSeekerBadge] = useState('');
+
+    // Navigation Guard
+    useEffect(() => {
+        if (!publicKey && !localStorage.getItem('soltag_wallet_pubkey')) {
+            navigate('/connect');
+        }
+    }, [publicKey, navigate]);
 
     const eventName = qrPayload?.meta?.name || 'Event';
 
@@ -106,8 +115,9 @@ export default function ConfirmMintScreen() {
                 <button
                     className="btn btn-primary"
                     onClick={handleConfirm}
+                    disabled={!publicKey}
                 >
-                    Confirm & Sign
+                    {publicKey ? 'Confirm & Sign' : 'Connect Wallet to Sign'}
                 </button>
             </div>
         </div>

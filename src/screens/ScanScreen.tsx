@@ -1,43 +1,133 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Camera, MapPin, Keyboard, Copy } from 'lucide-react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { ArrowLeft, Camera, MapPin, Keyboard, Copy, AlertCircle, Wallet } from 'lucide-react';
+import jsQR from 'jsqr';
 import './ScanScreen.css';
 
 export default function ScanScreen() {
     const navigate = useNavigate();
+    const { publicKey } = useWallet();
     const [scanning, setScanning] = useState(true);
     const [useLocation, setUseLocation] = useState(true);
     const [showManualInput, setShowManualInput] = useState(false);
     const [manualCode, setManualCode] = useState('');
+    const [error, setError] = useState<string | null>(null);
 
-    // Simulate scan after 3 seconds for demo
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const requestRef = useRef<number>();
+
+    // Navigation Guard: Must have a wallet connected to scan
     useEffect(() => {
-        if (scanning && !showManualInput) {
-            const timer = setTimeout(() => {
-                // Simulate successful scan
-                handleScanSuccess();
-            }, 3000);
-            return () => clearTimeout(timer);
+        if (!publicKey && !localStorage.getItem('soltag_wallet_pubkey')) {
+            // No wallet connected or stored, redirect
+            navigate('/connect', { state: { from: '/scan', message: 'Please connect your wallet to scan events.' } });
         }
-    }, [scanning, showManualInput]);
+    }, [publicKey, navigate]);
 
-    const handleScanSuccess = () => {
-        setScanning(false);
-        // Navigate to verify screen with mock payload
-        navigate('/verify', {
-            state: {
-                qrPayload: {
-                    v: 1,
-                    event_pubkey: '8yLXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgBsV',
-                    start_ts: Date.now() - 3600000,
-                    end_ts: Date.now() + 7200000,
-                    zone_code: 'dr5ru',
-                    nonce: 'uuid-v4-demo',
-                    meta: { name: 'Web3 Builders Night' },
-                    sig: 'ed25519-demo-signature'
+    // Initialize camera
+    useEffect(() => {
+        let stream: MediaStream | null = null;
+
+        const startCamera = async () => {
+            try {
+                setError(null);
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
+                    videoRef.current.play();
+                }
+            } catch (err) {
+                console.error('Camera access error:', err);
+                setError('Could not access camera. Please check permissions.');
+                setScanning(false);
+            }
+        };
+
+        if (scanning && !showManualInput && publicKey) {
+            startCamera();
+        }
+
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            if (requestRef.current) {
+                cancelAnimationFrame(requestRef.current);
+            }
+        };
+    }, [scanning, showManualInput, publicKey]);
+
+    // Scanning loop
+    useEffect(() => {
+        const tick = () => {
+            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+                const canvas = canvasRef.current;
+                const video = videoRef.current;
+
+                if (canvas) {
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    if (ctx) {
+                        canvas.height = video.videoHeight;
+                        canvas.width = video.videoWidth;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: 'dontInvert',
+                        });
+
+                        if (code) {
+                            handleScanSuccess(code.data);
+                            return; // Stop loop
+                        }
+                    }
                 }
             }
-        });
+            requestRef.current = requestAnimationFrame(tick);
+        };
+
+        if (scanning && !showManualInput && !error && publicKey) {
+            requestRef.current = requestAnimationFrame(tick);
+        }
+
+        return () => {
+            if (requestRef.current) {
+                cancelAnimationFrame(requestRef.current);
+            }
+        };
+    }, [scanning, showManualInput, error, publicKey]);
+
+    const handleScanSuccess = (rawData?: string) => {
+        setScanning(false);
+
+        // In production, parse/validate rawData. 
+        let payload = null;
+        if (rawData) {
+            try {
+                payload = JSON.parse(rawData);
+            } catch (e) {
+                console.warn('QR data is not JSON, using fallback mock for demo');
+            }
+        }
+
+        const qrPayload = payload || {
+            v: 1,
+            event_pubkey: '8yLXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgBsV',
+            start_ts: Date.now() - 3600000,
+            end_ts: Date.now() + 7200000,
+            zone_code: 'dr5ru',
+            nonce: `nonce-${Date.now()}`,
+            meta: { name: 'Web3 Builders Night' },
+            sig: 'ed25519-demo-signature'
+        };
+
+        navigate('/verify', { state: { qrPayload } });
     };
 
     const handleManualSubmit = () => {
@@ -48,8 +138,13 @@ export default function ScanScreen() {
 
     return (
         <div className="scan-screen">
-            {/* Camera preview (simulated) */}
+            {/* Camera preview */}
             <div className="camera-preview">
+                {scanning && !showManualInput && !error && publicKey && (
+                    <video ref={videoRef} className="video-feed" />
+                )}
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+
                 <div className="camera-gradient-top" />
                 <div className="camera-gradient-bottom" />
 
@@ -58,8 +153,25 @@ export default function ScanScreen() {
                     <ArrowLeft size={24} />
                 </button>
 
+                {!publicKey && (
+                    <div className="camera-error animate-fade-in">
+                        <Wallet size={48} color="var(--color-primary)" />
+                        <p>Connecting wallet...</p>
+                    </div>
+                )}
+
+                {error && publicKey && (
+                    <div className="camera-error animate-fade-in">
+                        <AlertCircle size={48} color="var(--color-error)" />
+                        <p>{error}</p>
+                        <button className="btn btn-secondary" onClick={() => setScanning(true)}>
+                            Try Again
+                        </button>
+                    </div>
+                )}
+
                 {/* Scan overlay */}
-                {!showManualInput && (
+                {!showManualInput && !error && publicKey && (
                     <div className="scan-overlay">
                         <div className="scan-frame">
                             <div className="scan-corner scan-corner-tl" />
@@ -116,6 +228,7 @@ export default function ScanScreen() {
                     <button
                         className="scan-option"
                         onClick={() => setShowManualInput(true)}
+                        disabled={!publicKey}
                     >
                         <Keyboard size={20} />
                         <span>Manual Code</span>
@@ -124,6 +237,7 @@ export default function ScanScreen() {
                     <button
                         className={`scan-option location-toggle ${useLocation ? 'active' : ''}`}
                         onClick={() => setUseLocation(!useLocation)}
+                        disabled={!publicKey}
                     >
                         <MapPin size={20} />
                         <span>Location {useLocation ? 'On' : 'Off'}</span>
@@ -132,7 +246,7 @@ export default function ScanScreen() {
 
                 <div className="camera-status">
                     <Camera size={16} />
-                    <span>{scanning ? 'Scanning...' : 'Ready'}</span>
+                    <span>{scanning && publicKey ? 'Scanning...' : 'Ready'}</span>
                 </div>
             </div>
         </div>

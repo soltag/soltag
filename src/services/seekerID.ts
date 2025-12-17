@@ -37,32 +37,31 @@ interface DeviceInfo {
 /**
  * Detect if the current device is a Solana Seeker phone
  * 
- * Checks:
- * 1. OS build properties
- * 2. Presence of Seeker attestation service
- * 3. Hardware capabilities
+ * Logic:
+ * 1. Check for Capacitor 'SeekerPlugin' bridge
+ * 2. Fallback to OS build property check (simulated)
  */
 export async function isSeekerDevice(): Promise<boolean> {
     try {
-        // PLACEHOLDER: In production, check actual Seeker APIs
-        // For React Native:
-        // import { NativeModules } from 'react-native';
-        // const { SeekerID } = NativeModules;
-        // return await SeekerID.isAvailable();
-
-        // For web/emulator: always return false
-        if (typeof window !== 'undefined') {
-            return false;
+        // 1. Check for Capacitor Native Bridge
+        // @ts-ignore - Capacitor might not be in types yet
+        if (window.Capacitor?.Plugins?.SeekerPlugin) {
+            console.log('[Seeker] Native bridge detected');
+            return true;
         }
 
-        // Mock detection for development
+        // 2. Simulated detection for Seeker development environment
+        // In local dev, we can set a flag to test Seeker features
+        const isSimulatedSeeker = localStorage.getItem('SOLTAG_SIMULATE_SEEKER') === 'true';
+        if (isSimulatedSeeker) {
+            return true;
+        }
+
+        // 3. Mock detection based on User Agent (very basic)
         const userAgent = navigator?.userAgent || '';
-        const isAndroid = /Android/i.test(userAgent);
+        const looksLikeSeeker = /Android/i.test(userAgent) && /Seeker/i.test(userAgent);
 
-        // In production, replace with actual Seeker device detection
-        console.log('[Seeker] Device detection - Android:', isAndroid);
-
-        return false; // Default to false until native module is available
+        return looksLikeSeeker;
     } catch (error) {
         console.error('[Seeker] Detection error:', error);
         return false;
@@ -100,15 +99,27 @@ export async function requestAttestation(
             return null;
         }
 
-        // PLACEHOLDER: Request attestation from Seeker secure enclave
-        // In production:
-        // const { SeekerID } = NativeModules;
-        // const attestation = await SeekerID.requestAttestation({
-        //     scope: request.scope,
-        //     payload: Buffer.from(JSON.stringify(request.payload)).toString('base64')
-        // });
-
+        // 3. Request attestation from Native Bridge or Mock
         console.log('[Seeker] Requesting attestation for:', request.scope);
+
+        let attestation: SeekerAttestation | null = null;
+
+        // @ts-ignore
+        if (window.Capacitor?.Plugins?.SeekerPlugin) {
+            try {
+                // @ts-ignore
+                attestation = await window.Capacitor.Plugins.SeekerPlugin.requestAttestation({
+                    scope: request.scope,
+                    payload: JSON.stringify(request.payload)
+                });
+            } catch (err) {
+                console.error('[Seeker] Native attestation failed:', err);
+            }
+        }
+
+        if (attestation) return attestation;
+
+        // Mock attestation for development
 
         // Mock attestation for development
         const mockAttestation: SeekerAttestation = {

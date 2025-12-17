@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trophy, Crown, RefreshCw, Medal } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
+import { ledgerService } from '../services/ledgerService';
 import './LeaderboardScreen.css';
 
 interface LeaderboardEntry {
@@ -28,12 +29,28 @@ const mockLeaderboard: LeaderboardEntry[] = [
     { rank: 42, wallet: 'Abc...Xyz', displayName: 'You', attendanceCount: 18, isCurrentUser: true },
 ];
 
-const currentUserRank = mockLeaderboard.find(e => e.isCurrentUser);
-
 export default function LeaderboardScreen() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'global' | 'month'>('global');
     const [loading, setLoading] = useState(false);
+    const [attendanceCount, setAttendanceCount] = useState(18); // Default mock
+
+    useEffect(() => {
+        ledgerService.getAttendanceCount().then(setAttendanceCount);
+    }, []);
+
+    // Merge actual attendance into mock data for display
+    const updatedLeaderboard = mockLeaderboard.map(entry =>
+        entry.isCurrentUser ? { ...entry, attendanceCount } : entry
+    ).sort((a, b) => b.attendanceCount - a.attendanceCount);
+
+    // Recalculate ranks after sorting
+    const rankedLeaderboard = updatedLeaderboard.map((entry, index) => ({
+        ...entry,
+        rank: index + 1
+    }));
+
+    const currentUserRank = rankedLeaderboard.find(e => e.isCurrentUser);
 
     const handleRefresh = () => {
         setLoading(true);
@@ -51,8 +68,8 @@ export default function LeaderboardScreen() {
         return 'rank-normal';
     };
 
-    const top3 = mockLeaderboard.slice(0, 3);
-    const restOfList = mockLeaderboard.slice(3);
+    const top3 = rankedLeaderboard.slice(0, 3);
+    const restOfList = rankedLeaderboard.slice(3);
 
     return (
         <div className="leaderboard-screen">

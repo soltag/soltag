@@ -27,39 +27,43 @@ import LeaderboardScreen from './screens/LeaderboardScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import HelpPrivacyScreen from './screens/HelpPrivacyScreen';
 
+import AppLock from './components/AppLock';
+
 function App() {
     return (
-        <Routes>
-            {/* Entry & Onboarding */}
-            <Route path="/" element={<SplashScreen />} />
-            <Route path="/onboarding" element={<OnboardingScreen />} />
-            <Route path="/connect" element={<ConnectWalletScreen />} />
+        <AppLock>
+            <Routes>
+                {/* Entry & Onboarding */}
+                <Route path="/" element={<SplashScreen />} />
+                <Route path="/onboarding" element={<OnboardingScreen />} />
+                <Route path="/connect" element={<ConnectWalletScreen />} />
 
-            {/* Main Experience */}
-            <Route path="/home" element={<HomeScreen />} />
-            <Route path="/events" element={<EventsListScreen />} />
-            <Route path="/event/:id" element={<EventDetailScreen />} />
+                {/* Main Experience */}
+                <Route path="/home" element={<HomeScreen />} />
+                <Route path="/events" element={<EventsListScreen />} />
+                <Route path="/event/:id" element={<EventDetailScreen />} />
 
-            {/* Event Attendance Flow */}
-            <Route path="/scan" element={<ScanScreen />} />
-            <Route path="/verify" element={<VerifyScanScreen />} />
-            <Route path="/confirm" element={<ConfirmMintScreen />} />
-            <Route path="/pending" element={<TransactionPendingScreen />} />
-            <Route path="/success" element={<MintSuccessScreen />} />
+                {/* Event Attendance Flow */}
+                <Route path="/scan" element={<ScanScreen />} />
+                <Route path="/verify" element={<VerifyScanScreen />} />
+                <Route path="/confirm" element={<ConfirmMintScreen />} />
+                <Route path="/pending" element={<TransactionPendingScreen />} />
+                <Route path="/success" element={<MintSuccessScreen />} />
 
-            {/* Profile & Credentials */}
-            <Route path="/profile" element={<ProfileScreen />} />
-            <Route path="/credential/:id" element={<CredentialDetailScreen />} />
-            <Route path="/queue" element={<OfflineQueueScreen />} />
-            <Route path="/leaderboard" element={<LeaderboardScreen />} />
+                {/* Profile & Credentials */}
+                <Route path="/profile" element={<ProfileScreen />} />
+                <Route path="/credential/:id" element={<CredentialDetailScreen />} />
+                <Route path="/queue" element={<OfflineQueueScreen />} />
+                <Route path="/leaderboard" element={<LeaderboardScreen />} />
 
-            {/* Utility */}
-            <Route path="/settings" element={<SettingsScreen />} />
-            <Route path="/help" element={<HelpPrivacyScreen />} />
+                {/* Utility */}
+                <Route path="/settings" element={<SettingsScreen />} />
+                <Route path="/help" element={<HelpPrivacyScreen />} />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+        </AppLock>
     );
 }
 

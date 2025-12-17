@@ -1,13 +1,38 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Calendar, Clock, User, Shield, ExternalLink, QrCode } from 'lucide-react';
-import { mockEvents, formatDate, formatTime, getEventStatus } from '../data/mockData';
+import { ledgerService } from '../services/ledgerService';
+import { formatDate, formatTime, getEventStatus } from '../data/mockData';
+import type { Event } from '../types';
 import './EventDetailScreen.css';
 
 export default function EventDetailScreen() {
     const { id } = useParams();
     const navigate = useNavigate();
 
-    const event = mockEvents.find(e => e.id === id);
+    const [event, setEvent] = useState<Event | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadEvent = async () => {
+            if (!id) return;
+            const events = await ledgerService.getEvents();
+            const found = events.find(e => e.id === id);
+            setEvent(found || null);
+            setLoading(false);
+        };
+        loadEvent();
+    }, [id]);
+
+    if (loading) {
+        return (
+            <div className="event-detail-screen">
+                <div className="event-not-found">
+                    <p>Loading event...</p>
+                </div>
+            </div>
+        );
+    }
 
     if (!event) {
         return (

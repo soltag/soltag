@@ -6,6 +6,7 @@ import {
     WalletModalProvider,
 } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
+import { SolanaMobileWalletAdapter, createDefaultAddressSelector, createDefaultAuthorizationResultCache, createDefaultWalletNotFoundHandler } from '@solana-mobile/wallet-adapter-mobile';
 
 // Import the styles directly
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -23,6 +24,17 @@ export const WalletContextProvider: FC<WalletContextProviderProps> = ({ children
 
     const wallets = useMemo(
         () => [
+            new SolanaMobileWalletAdapter({
+                addressSelector: createDefaultAddressSelector(),
+                appIdentity: {
+                    name: 'Soltag',
+                    uri: 'https://soltag.app',
+                    icon: 'favicon.ico',
+                },
+                authorizationResultCache: createDefaultAuthorizationResultCache(),
+                cluster: network,
+                onWalletNotFound: createDefaultWalletNotFoundHandler(),
+            }),
             new PhantomWalletAdapter(),
             new SolflareWalletAdapter(),
         ],
