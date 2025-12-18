@@ -2,6 +2,13 @@
 
 Soltag is a mobile-first application designed to record and verify event attendance using the Solana blockchain. By combining **Solana Mobile Stack (SMS)**, **Program Derived Addresses (PDAs)**, and **Supabase**, Soltag provides an immutable, privacy-preserving, and high-performance attendance ledger.
 
+## 📦 Latest Release
+
+Stay up to date with the latest production-ready builds:
+- **Current Version**: `v1.0.0-beta-2`
+- **Asset**: [Download solgot.apk](https://github.com/soltag/soltag/releases/tag/v1.0.0-beta-2) (Signed Production Build)
+- **Status**: Hardened Supabase Backend + Ed25519 QR Validation.
+
 ## 🚀 Features
 
 - **Verified Check-ins**: Deterministically track attendance via on-chain PDAs.
