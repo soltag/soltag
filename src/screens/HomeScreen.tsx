@@ -4,9 +4,11 @@ import { QrCode, ChevronRight, Trophy, Sparkles } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import CredentialCard from '../components/CredentialCard';
 import EventCard from '../components/EventCard';
-import { getEvents, getCredentials } from '../services/api';
+import { getCredentials } from '../services/api';
+import { eventService } from '../services/eventService';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { getEventStatus } from '../data/mockData';
+import { useAuthStore } from '../stores/authStore';
+
 
 
 
@@ -15,7 +17,11 @@ import './HomeScreen.css';
 
 export default function HomeScreen() {
     const navigate = useNavigate();
+    const { publicKey: walletPubKey } = useAuthStore();
     const { publicKey } = useWallet();
+
+    // Derive address: use adapter if connected, else fallback to store
+    const currentAddress = publicKey ? publicKey.toBase58() : walletPubKey;
 
 
     const [credentials, setCredentials] = useState<Credential[]>([]);
@@ -24,19 +30,18 @@ export default function HomeScreen() {
     useEffect(() => {
         const loadData = async () => {
             const [creds, evts] = await Promise.all([
-                publicKey ? getCredentials(publicKey.toBase58()) : Promise.resolve([]),
-                getEvents()
+                currentAddress ? getCredentials(currentAddress) : Promise.resolve([]),
+                eventService.getEvents()
             ]);
             setCredentials(creds);
             setEvents(evts);
         };
         loadData();
-    }, [publicKey]);
+    }, [currentAddress]);
 
 
 
     const recentCredentials = credentials.slice(0, 3);
-    const nearbyEvents = events.filter(e => getEventStatus(e) !== 'past').slice(0, 3);
 
     const handleScanClick = () => {
         navigate('/scan');
@@ -99,15 +104,30 @@ export default function HomeScreen() {
                 {/* Nearby Events */}
                 <section className="home-section animate-slide-up">
                     <div className="section-header">
-                        <h2 className="section-title">Nearby Events</h2>
-                        <button className="section-link" onClick={() => navigate('/events')}>
-                            View all
+                        <h2 className="section-title">Events Feed</h2>
+                        <button className="section-link" onClick={() => navigate('/create-event')}>
+                            + Host Event
                         </button>
                     </div>
+
+                    {/* Create Event Prompt */}
+                    <div className="create-event-promo" onClick={() => navigate('/create-event')}>
+                        <div className="promo-icon">✨</div>
+                        <div className="promo-text">
+                            <h3>Host your own event</h3>
+                            <p>Organize specific meetups and issue on-chain credentials</p>
+                        </div>
+                        <div className="promo-arrow">→</div>
+                    </div>
+
                     <div className="events-list">
-                        {nearbyEvents.map(event => (
-                            <EventCard key={event.id} event={event} />
-                        ))}
+                        {events.length > 0 ? (
+                            events.map(event => (
+                                <EventCard key={event.id} event={event} />
+                            ))
+                        ) : (
+                            <p className="empty-state">No upcoming events found.</p>
+                        )}
                     </div>
                 </section>
 

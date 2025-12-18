@@ -133,12 +133,57 @@
     color: var(--color-success);
 }
 
+.event-status.past {
+    background: var(--color-card-bg);
+    color: var(--color-text-muted);
+}
+
 .event-status.upcoming {
     background: rgba(59, 130, 246, 0.2);
     color: var(--color-info);
 }
 
-.event-status.past {
-    background: var(--color-card-bg);
-    color: var(--color-text-muted);
+.event-card-pending {
+    opacity: 0.8;
+}
+
+.event-status-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    backdrop-filter: blur(4px);
+    z-index: 2;
+}
+
+.event-status-badge.pending {
+    background: rgba(255, 193, 7, 0.2);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #ffc107;
+}
+
+.event-status-badge.confirmed {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #10b981;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }

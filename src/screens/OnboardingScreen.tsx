@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Scan, Bell, ChevronRight, ChevronLeft } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 import './OnboardingScreen.css';
 
 interface Slide {
@@ -56,8 +57,10 @@ export default function OnboardingScreen() {
         handleGetStarted();
     };
 
-    const handleGetStarted = () => {
-        localStorage.setItem('soltag_onboarding_complete', 'true');
+    const setHasCompletedOnboarding = useAuthStore(state => state.setHasCompletedOnboarding);
+
+    const handleGetStarted = async () => {
+        await setHasCompletedOnboarding(true);
         navigate('/connect');
     };
 

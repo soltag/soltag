@@ -7,8 +7,8 @@ import { signInWithWallet } from '../services/api';
 import {
     isMWAAvailable,
     authenticateWithMWA,
-    getStoredWalletPubkey
 } from '../services/mwaService';
+import { useAuthStore } from '../stores/authStore';
 import {
     connectToPhantom,
     signMessageWithPhantom,
@@ -31,9 +31,11 @@ export default function ConnectWalletScreen() {
     const { connected, publicKey, signMessage, connecting } = useWallet();
     const { setVisible } = useWalletModal();
 
+    // We'll use a local ref or state if needed for pending, but currently redundant
+    // because App root handles auth navigation.
+
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
-    const [pendingAuth, setPendingAuth] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [authMethod, setAuthMethod] = useState<'mwa' | 'deeplink' | 'adapter' | null>(null);
 
@@ -42,6 +44,8 @@ export default function ConnectWalletScreen() {
 
     // Ref to prevent double-initialization of MWA flow
     const mwaInProgress = useRef(false);
+
+    const login = useAuthStore(state => state.login);
 
     // Handle Phantom deep-link callbacks
     useEffect(() => {
@@ -91,8 +95,7 @@ export default function ConnectWalletScreen() {
                     const result = await signInWithWallet(walletAddress, signature, nonce);
 
                     if (result.ok) {
-                        localStorage.setItem('soltag_wallet_pubkey', walletAddress);
-                        localStorage.setItem('soltag_username', 'Explorer');
+                        await login(walletAddress, 'Explorer', result.token || 'deeplink_active');
                         localStorage.removeItem(PENDING_NONCE_KEY);
                         localStorage.removeItem(AUTH_STEP_KEY);
                         navigate('/home');
@@ -114,7 +117,7 @@ export default function ConnectWalletScreen() {
         };
 
         handleCallback();
-    }, [location, navigate]);
+    }, [location, navigate, login]);
 
     // Perform MWA authentication (Primary Path)
     const performMWAAuth = useCallback(async () => {
@@ -150,8 +153,7 @@ export default function ConnectWalletScreen() {
             const result = await signInWithWallet(walletAddress, signature, nonce);
 
             if (result.ok) {
-                localStorage.setItem('soltag_wallet_pubkey', walletAddress);
-                localStorage.setItem('soltag_username', 'Explorer');
+                await login(walletAddress, 'Explorer', result.token || 'mwa_active');
                 navigate('/home');
             } else {
                 setAuthError(result.error || 'Identity verification failed');
@@ -163,7 +165,7 @@ export default function ConnectWalletScreen() {
             setIsAuthenticating(false);
             mwaInProgress.current = false;
         }
-    }, [navigate, isAndroid]);
+    }, [navigate, isAndroid, login]);
 
     const handleDeepLinkFallback = () => {
         console.log('[Auth] [Fallback] Starting Phantom deep-link flow');
@@ -195,37 +197,32 @@ export default function ConnectWalletScreen() {
             const result = await signInWithWallet(address, signature, nonce);
 
             if (result.ok) {
-                localStorage.setItem('soltag_wallet_pubkey', address);
-                localStorage.setItem('soltag_username', 'Explorer');
+                await login(address, 'Explorer', result.token);
                 navigate('/home');
             } else {
-                setAuthError(result.error);
+                setAuthError(result.error || 'Server verification failed');
             }
         } catch (err) {
             console.error('[Auth] [Error] Adapter path failed:', err);
             setAuthError('Signature request was cancelled.');
         } finally {
             setIsAuthenticating(false);
-            setPendingAuth(false);
         }
-    }, [connected, publicKey, signMessage, isAuthenticating, navigate]);
+    }, [connected, publicKey, signMessage, isAuthenticating, navigate, login]);
 
+    // Trigger adapter auth when connected and pending
     useEffect(() => {
-        if (connected && publicKey && pendingAuth && !isMWASupported && !isAndroid) {
-            performAdapterAuth();
-        }
-    }, [connected, publicKey, pendingAuth, performAdapterAuth, isMWASupported, isAndroid]);
-
-    // Check for existing auth on mount
-    useEffect(() => {
-        const savedToken = localStorage.getItem('soltag_auth_token');
-        const savedWallet = getStoredWalletPubkey();
-
-        if (savedToken && savedWallet) {
-            navigate('/home');
-        }
-    }, [navigate]);
-
+        const checkConnection = async () => {
+            if (connected && publicKey && !isMWASupported && !isAndroid && !isAuthenticating) {
+                // Check if we already have a session to avoid double-triggers
+                const sessionToken = await useAuthStore.getState().authToken;
+                if (!sessionToken) {
+                    performAdapterAuth();
+                }
+            }
+        };
+        checkConnection();
+    }, [connected, publicKey, isMWASupported, isAndroid, performAdapterAuth, isAuthenticating]);
     const handleConnectClick = useCallback(() => {
         setAuthError(null);
 
@@ -236,16 +233,13 @@ export default function ConnectWalletScreen() {
         } else {
             // Desktop/iOS
             setVisible(true);
-            setPendingAuth(true);
         }
     }, [isMWASupported, isAndroid, performMWAAuth, setVisible]);
 
-    const handleGuestLogin = useCallback(() => {
-        localStorage.setItem('soltag_wallet_pubkey', 'guest_explorer_mode');
-        localStorage.setItem('soltag_username', 'Guest');
-        localStorage.setItem('soltag_auth_token', 'guest_mode_active');
+    const handleGuestLogin = useCallback(async () => {
+        await login('guest_explorer_mode', 'Guest', 'guest_mode_active');
         navigate('/home');
-    }, [navigate]);
+    }, [navigate, login]);
 
     const isLoading = connecting || isAuthenticating;
 

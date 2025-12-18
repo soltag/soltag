@@ -104,30 +104,23 @@ export default function ScanScreen() {
     }, [scanning, showManualInput, error, publicKey]);
 
     const handleScanSuccess = (rawData?: string) => {
-        setScanning(false);
+        if (!rawData) return;
 
-        // In production, parse/validate rawData. 
-        let payload = null;
-        if (rawData) {
-            try {
-                payload = JSON.parse(rawData);
-            } catch (e) {
-                console.warn('QR data is not JSON, using fallback mock for demo');
+        try {
+            const qrPayload = JSON.parse(rawData);
+
+            // Basic validation
+            if (!qrPayload.v || !qrPayload.event_pubkey) {
+                throw new Error('Invalid QR format');
             }
+
+            setScanning(false);
+            navigate('/verify', { state: { qrPayload } });
+        } catch (e) {
+            console.error('QR parsing error:', e);
+            setError('Invalid or unsupported QR code format.');
+            setScanning(true);
         }
-
-        const qrPayload = payload || {
-            v: 1,
-            event_pubkey: '8yLXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgBsV',
-            start_ts: Date.now() - 3600000,
-            end_ts: Date.now() + 7200000,
-            zone_code: 'dr5ru',
-            nonce: `nonce-${Date.now()}`,
-            meta: { name: 'Web3 Builders Night' },
-            sig: 'ed25519-demo-signature'
-        };
-
-        navigate('/verify', { state: { qrPayload } });
     };
 
     const handleManualSubmit = () => {

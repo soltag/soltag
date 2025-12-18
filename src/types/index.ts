@@ -19,6 +19,10 @@ export interface Event {
     location?: string;
     attended?: boolean;
     bookmarked?: boolean;
+    // Real-time & Optimistic fields
+    status?: 'pending' | 'confirmed' | 'finalized';
+    tx_signature?: string;
+    local_id?: string;
 }
 
 // QR Payload (canonical scanned object)

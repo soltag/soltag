@@ -205,7 +205,7 @@ export async function signInWithWallet(
     walletAddress: string,
     signature: Uint8Array,
     nonce: string
-): Promise<{ ok: true } | { error: string; ok: false }> {
+): Promise<{ ok: true, token: string } | { error: string; ok: false }> {
     // In production, this call would go to an Edge Function that verifies:
     // 1. That the nonce hasn't been used.
     // 2. That the signature is valid for the public key + nonce.
@@ -221,10 +221,11 @@ export async function signInWithWallet(
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 800));
 
+    const token = 'simulated_jwt_' + Math.random().toString(36).slice(2);
     // Store in localStorage as well for high-speed retrieval
-    localStorage.setItem('soltag_auth_token', 'simulated_jwt_' + Math.random().toString(36).slice(2));
+    localStorage.setItem('soltag_auth_token', token);
 
-    return { ok: true };
+    return { ok: true, token };
 }
 
 

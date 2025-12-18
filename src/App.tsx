@@ -11,6 +11,7 @@ import ConnectWalletScreen from './screens/ConnectWalletScreen';
 import HomeScreen from './screens/HomeScreen';
 import EventsListScreen from './screens/EventsListScreen';
 import EventDetailScreen from './screens/EventDetailScreen';
+import CreateEventScreen from './screens/CreateEventScreen';
 
 // Event Attendance Flow
 import ScanScreen from './screens/ScanScreen';
@@ -30,10 +31,18 @@ import SettingsScreen from './screens/SettingsScreen';
 import HelpPrivacyScreen from './screens/HelpPrivacyScreen';
 
 import AppLock from './components/AppLock';
+import { useAuthStore } from './stores/authStore';
 
 function App() {
     console.log('[App] [Lifecycle] Rendering App component...');
     const navigate = useNavigate();
+    const initializeAuth = useAuthStore(state => state.initialize);
+    const isInitialized = useAuthStore(state => state.isInitialized);
+
+    // Initialize Auth Store
+    useEffect(() => {
+        initializeAuth();
+    }, [initializeAuth]);
 
     useEffect(() => {
         console.log('[App] [Lifecycle] App mounted, setting up listeners');
@@ -81,6 +90,10 @@ function App() {
         };
     }, [navigate]);
 
+    if (!isInitialized) {
+        return <SplashScreen />; // Show splash while restoring session
+    }
+
     return (
         <AppLock>
             <Routes>
@@ -93,6 +106,7 @@ function App() {
                 <Route path="/home" element={<HomeScreen />} />
                 <Route path="/events" element={<EventsListScreen />} />
                 <Route path="/event/:id" element={<EventDetailScreen />} />
+                <Route path="/create-event" element={<CreateEventScreen />} />
 
                 {/* Event Attendance Flow */}
                 <Route path="/scan" element={<ScanScreen />} />

@@ -8,6 +8,7 @@ import { getCredentials, getUserNotifications, getProfile, upsertProfile, markNo
 import { uploadAvatar } from '../services/storageService';
 import { shortenAddress, formatDateTime } from '../data/mockData';
 import type { Credential, Notification } from '../types';
+import { useAuthStore } from '../stores/authStore';
 
 
 
@@ -17,12 +18,11 @@ type Filter = 'all' | 'conference' | 'gym' | 'ticket';
 
 export default function ProfileScreen() {
     const navigate = useNavigate();
-    const { publicKey, disconnect } = useWallet();
+    const { publicKey: walletPubKey, logout } = useAuthStore();
+    const { publicKey } = useWallet();
     const [view, setView] = useState<'credentials' | 'notifications'>('credentials');
 
-
-    // Get real public key if connected, otherwise fallback to stored (or empty)
-    const walletAddress = publicKey ? publicKey.toBase58() : localStorage.getItem('soltag_wallet_pubkey') || '';
+    const walletAddress = publicKey ? publicKey.toBase58() : walletPubKey || '';
 
     const [credentials, setCredentials] = useState<Credential[]>([]);
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -73,9 +73,7 @@ export default function ProfileScreen() {
     };
 
     const handleDisconnect = async () => {
-        await disconnect();
-        localStorage.removeItem('soltag_wallet_connected');
-        localStorage.removeItem('soltag_wallet_pubkey');
+        await logout();
         navigate('/connect');
     };
 

@@ -1,28 +1,31 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { secureGet, STORAGE_KEYS } from '../storage/secureStorage';
 import './SplashScreen.css';
 
 export default function SplashScreen() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Simulate loading and auto-navigate
-        const timer = setTimeout(() => {
-            // Check if first run (would check localStorage in real app)
-            const hasCompletedOnboarding = localStorage.getItem('soltag_onboarding_complete');
-            const walletConnected = localStorage.getItem('soltag_wallet_connected');
+        const init = async () => {
+            // Check if first run
+            const hasCompletedOnboarding = await secureGet(STORAGE_KEYS.ONBOARDING_COMPLETE);
+            const walletConnected = await secureGet(STORAGE_KEYS.AUTH_TOKEN);
 
-            if (!hasCompletedOnboarding) {
-                navigate('/onboarding');
-            } else if (!walletConnected) {
-                navigate('/connect');
-            } else {
-                navigate('/home');
-            }
-        }, 2000);
+            // Give the splash screen at least 2 seconds of airtime
+            setTimeout(() => {
+                if (!hasCompletedOnboarding) {
+                    navigate('/onboarding');
+                } else if (!walletConnected) {
+                    navigate('/connect');
+                } else {
+                    navigate('/home');
+                }
+            }, 2000);
+        };
 
-        return () => clearTimeout(timer);
+        init();
     }, [navigate]);
 
     return (
