@@ -1,22 +1,32 @@
 import { useEffect, useState, useCallback } from 'react';
 
 import { useNavigate } from 'react-router-dom';
-import { HelpCircle, Wallet, Loader2 } from 'lucide-react';
+import { HelpCircle, Wallet, Loader2, Smartphone } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { requestAuthNonce, signInWithWallet } from '../services/api';
+import {
+    isMWAAvailable,
+    connectWithMWA,
+    signMessageWithMWA,
+    getStoredWalletPubkey
+} from '../services/mwaService';
 
 import './ConnectWalletScreen.css';
 
 export default function ConnectWalletScreen() {
     const navigate = useNavigate();
-    const { connected, publicKey, signMessage, connect, select, wallets, connecting } = useWallet();
+    const { connected, publicKey, signMessage, connecting } = useWallet();
     const { setVisible } = useWalletModal();
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
     const [pendingAuth, setPendingAuth] = useState(false);
+    const [isMWAMode, setIsMWAMode] = useState(false);
 
-    // Perform Sign-in-with-Solana after wallet is connected
+    // Check if we should use direct MWA (Android) or wallet-adapter
+    const shouldUseMWA = isMWAAvailable();
+
+    // Perform Sign-in-with-Solana after wallet is connected (wallet-adapter path)
     const performAuth = useCallback(async () => {
         if (!connected || !publicKey || !signMessage || isAuthenticating) {
             return;
@@ -62,38 +72,92 @@ export default function ConnectWalletScreen() {
         }
     }, [connected, publicKey, signMessage, isAuthenticating, navigate]);
 
-    // When wallet connects and we have a pending auth, perform it
+    // Perform MWA authentication (direct protocol path)
+    const performMWAAuth = useCallback(async () => {
+        try {
+            setIsAuthenticating(true);
+            setIsMWAMode(true);
+            setAuthError(null);
+
+            // Step 1: Connect with MWA
+            console.log('[ConnectWallet] Starting MWA connection...');
+            const mwaResult = await connectWithMWA();
+
+            if (!mwaResult) {
+                throw new Error('MWA connection cancelled or failed');
+            }
+
+            const { publicKey: walletAddress } = mwaResult;
+            console.log('[ConnectWallet] MWA connected:', walletAddress);
+
+            // Step 2: Get nonce for SIWS
+            const nonce = await requestAuthNonce(walletAddress);
+
+            // Step 3: Sign message with MWA
+            const message = new TextEncoder().encode(
+                `Sign this message to authenticate with Soltag: ${nonce}`
+            );
+            const signature = await signMessageWithMWA(message);
+
+            if (!signature) {
+                throw new Error('Message signing cancelled or failed');
+            }
+
+            // Step 4: Verify & Sign In
+            const result = await signInWithWallet(walletAddress, signature, nonce);
+
+            if (result.ok) {
+                localStorage.setItem('soltag_wallet_pubkey', walletAddress);
+                localStorage.setItem('soltag_username', 'Explorer');
+                navigate('/home');
+            } else {
+                setAuthError(result.error || 'Authentication failed');
+            }
+        } catch (err) {
+            console.error('[ConnectWallet] MWA auth failed:', err);
+            setAuthError(
+                err instanceof Error
+                    ? err.message
+                    : 'Wallet connection failed. Please try again.'
+            );
+        } finally {
+            setIsAuthenticating(false);
+            setIsMWAMode(false);
+        }
+    }, [navigate]);
+
+    // When wallet connects and we have a pending auth, perform it (wallet-adapter path)
     useEffect(() => {
-        if (connected && publicKey && pendingAuth) {
+        if (connected && publicKey && pendingAuth && !shouldUseMWA) {
             performAuth();
         }
-    }, [connected, publicKey, pendingAuth, performAuth]);
+    }, [connected, publicKey, pendingAuth, performAuth, shouldUseMWA]);
 
-    // Handle wallet connection - single user action for MWA compliance
+    // Check for existing auth on mount
+    useEffect(() => {
+        const savedToken = localStorage.getItem('soltag_auth_token');
+        const savedWallet = getStoredWalletPubkey();
+
+        if (savedToken && savedWallet) {
+            navigate('/home');
+        }
+    }, [navigate]);
+
+    // Handle wallet connection
     const handleConnectWallet = useCallback(async () => {
         setAuthError(null);
 
-        // Check if there's already a wallet adapter selected/ready
-        const mwaWallet = wallets.find(w => w.adapter.name === 'Mobile Wallet Adapter');
-
-        if (mwaWallet && mwaWallet.readyState === 'Installed') {
-            // MWA is available - use it directly
-            try {
-                select(mwaWallet.adapter.name);
-                setPendingAuth(true);
-                await connect();
-            } catch (err) {
-                console.error('MWA connection failed:', err);
-                // Fallback to wallet modal
-                setVisible(true);
-                setPendingAuth(true);
-            }
+        if (shouldUseMWA) {
+            // Android: Use direct MWA protocol
+            console.log('[ConnectWallet] Using direct MWA protocol');
+            await performMWAAuth();
         } else {
-            // No MWA or not installed - show wallet modal
+            // Desktop/iOS: Use wallet-adapter modal
+            console.log('[ConnectWallet] Using wallet-adapter modal');
             setVisible(true);
             setPendingAuth(true);
         }
-    }, [wallets, select, connect, setVisible]);
+    }, [shouldUseMWA, performMWAAuth, setVisible]);
 
     const handleHelpClick = () => {
         navigate('/help');
@@ -113,9 +177,15 @@ export default function ConnectWalletScreen() {
                     {isLoading ? (
                         <div className="auth-loading">
                             <Loader2 className="animate-spin" size={32} />
-                            <p>{connecting ? 'Connecting wallet...' : 'Authenticating with wallet...'}</p>
+                            <p>
+                                {isMWAMode
+                                    ? 'Opening wallet...'
+                                    : connecting
+                                        ? 'Connecting wallet...'
+                                        : 'Authenticating with wallet...'}
+                            </p>
                         </div>
-                    ) : connected ? (
+                    ) : connected && !shouldUseMWA ? (
                         <div className="auth-loading">
                             <Loader2 className="animate-spin" size={32} />
                             <p>Completing authentication...</p>
@@ -126,8 +196,10 @@ export default function ConnectWalletScreen() {
                             onClick={handleConnectWallet}
                             disabled={isLoading}
                         >
-                            <Wallet size={20} />
-                            <span>Connect Wallet</span>
+                            {shouldUseMWA ? <Smartphone size={20} /> : <Wallet size={20} />}
+                            <span>
+                                {shouldUseMWA ? 'Connect Mobile Wallet' : 'Connect Wallet'}
+                            </span>
                         </button>
                     )}
                 </div>

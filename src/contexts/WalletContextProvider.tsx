@@ -6,7 +6,6 @@ import {
     WalletModalProvider,
 } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
-import { SolanaMobileWalletAdapter, createDefaultAddressSelector, createDefaultAuthorizationResultCache, createDefaultWalletNotFoundHandler } from '@solana-mobile/wallet-adapter-mobile';
 
 // Import the styles directly
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -16,29 +15,19 @@ interface WalletContextProviderProps {
 }
 
 export const WalletContextProvider: FC<WalletContextProviderProps> = ({ children }) => {
-    // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'.
-    const network = WalletAdapterNetwork.Devnet;
+    // Use mainnet-beta for production
+    const network = WalletAdapterNetwork.Mainnet;
 
     // You can also provide a custom RPC endpoint.
     const endpoint = useMemo(() => clusterApiUrl(network), [network]);
 
+    // Only include desktop wallets - MWA is handled separately via mwaService
     const wallets = useMemo(
         () => [
-            new SolanaMobileWalletAdapter({
-                addressSelector: createDefaultAddressSelector(),
-                appIdentity: {
-                    name: 'Soltag',
-                    uri: 'https://soltag.app',
-                    icon: 'favicon.ico',
-                },
-                authorizationResultCache: createDefaultAuthorizationResultCache(),
-                cluster: network,
-                onWalletNotFound: createDefaultWalletNotFoundHandler(),
-            }),
             new PhantomWalletAdapter(),
             new SolflareWalletAdapter(),
         ],
-        [network]
+        []
     );
 
     return (
