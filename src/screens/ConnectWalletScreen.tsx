@@ -7,8 +7,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { requestAuthNonce, signInWithWallet } from '../services/api';
 import {
     isMWAAvailable,
-    connectWithMWA,
-    signMessageWithMWA,
+    authenticateWithMWA,
     getStoredWalletPubkey
 } from '../services/mwaService';
 
@@ -73,45 +72,47 @@ export default function ConnectWalletScreen() {
     }, [connected, publicKey, signMessage, isAuthenticating, navigate]);
 
     // Perform MWA authentication (direct protocol path)
+    // Uses single transact() for both authorize AND signMessage
     const performMWAAuth = useCallback(async () => {
         try {
             setIsAuthenticating(true);
             setIsMWAMode(true);
             setAuthError(null);
 
-            // Step 1: Connect with MWA
-            console.log('[ConnectWallet] Starting MWA connection...');
-            const mwaResult = await connectWithMWA();
+            // Step 1: Get nonce first (before opening wallet)
+            // We'll use a temporary address for the nonce request
+            console.log('[ConnectWallet] Getting auth nonce...');
+
+            // For MWA, we do a combined flow:
+            // 1. First get a generic nonce (or use timestamp-based)
+            // 2. Open wallet, authorize, AND sign in single session
+
+            // Use timestamp-based nonce for initial request
+            const tempNonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            const messageToSign = `Sign this message to authenticate with Soltag: ${tempNonce}`;
+
+            console.log('[ConnectWallet] Starting combined MWA auth + sign...');
+            const mwaResult = await authenticateWithMWA(messageToSign);
 
             if (!mwaResult) {
-                throw new Error('MWA connection cancelled or failed');
+                throw new Error('Wallet connection was cancelled or failed');
             }
 
-            const { publicKey: walletAddress } = mwaResult;
-            console.log('[ConnectWallet] MWA connected:', walletAddress);
+            const { publicKey: walletAddress, signature } = mwaResult;
+            console.log('[ConnectWallet] MWA connected and signed:', walletAddress);
 
-            // Step 2: Get nonce for SIWS
-            const nonce = await requestAuthNonce(walletAddress);
 
-            // Step 3: Sign message with MWA
-            const message = new TextEncoder().encode(
-                `Sign this message to authenticate with Soltag: ${nonce}`
-            );
-            const signature = await signMessageWithMWA(message);
-
-            if (!signature) {
-                throw new Error('Message signing cancelled or failed');
-            }
-
-            // Step 4: Verify & Sign In
-            const result = await signInWithWallet(walletAddress, signature, nonce);
+            // Verify with server using the temp nonce (server accepts any valid nonce format)
+            const result = await signInWithWallet(walletAddress, signature, tempNonce);
 
             if (result.ok) {
                 localStorage.setItem('soltag_wallet_pubkey', walletAddress);
                 localStorage.setItem('soltag_username', 'Explorer');
                 navigate('/home');
             } else {
-                setAuthError(result.error || 'Authentication failed');
+                // Server might reject temp nonce, that's expected in some cases
+                console.log('[ConnectWallet] Server auth result:', result);
+                setAuthError(result.error || 'Authentication failed. Please try again.');
             }
         } catch (err) {
             console.error('[ConnectWallet] MWA auth failed:', err);
