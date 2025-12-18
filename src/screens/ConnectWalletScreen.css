@@ -208,3 +208,98 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* Multi-Wallet Selector */
+.wallet-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    width: 100%;
+}
+
+.wallet-option-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    width: 100%;
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-primary);
+    font-family: var(--font-family);
+    font-weight: 500;
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.wallet-option-btn:hover:not(:disabled) {
+    background: rgba(88, 28, 135, 0.1);
+    border-color: var(--color-accent-purple);
+    transform: translateX(4px);
+}
+
+.wallet-option-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.wallet-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+}
+
+.wallet-arrow {
+    margin-left: auto;
+    color: var(--color-text-muted);
+}
+
+.no-wallets-message {
+    text-align: center;
+    padding: var(--spacing-xl);
+    background: var(--color-card-bg);
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--color-border);
+}
+
+.no-wallets-message p {
+    margin: 0 0 var(--spacing-sm);
+    color: var(--color-text-secondary);
+}
+
+.no-wallets-message .small {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.install-wallet-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: linear-gradient(135deg, var(--color-accent-purple), var(--color-accent-blue));
+    border-radius: var(--radius-md);
+    color: white;
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.install-wallet-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(88, 28, 135, 0.3);
+}
+
+.mobile-btn {
+    margin-top: var(--spacing-sm);
+}
+
+.auth-hint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin-top: var(--spacing-xs);
+}

@@ -1,16 +1,14 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HelpCircle, Wallet, Loader2, Smartphone, AlertCircle, User } from 'lucide-react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { HelpCircle, Loader2, AlertCircle, User, ExternalLink } from 'lucide-react';
+import { useWallet, Wallet as WalletType } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { signInWithWallet } from '../services/api';
 import {
     isMWAAvailable,
-    authenticateWithMWA,
 } from '../services/mwaService';
 import { useAuthStore } from '../stores/authStore';
 import {
-    connectToPhantom,
     signMessageWithPhantom,
     handleConnectCallback,
     handleSignMessageCallback,
@@ -23,13 +21,12 @@ import './ConnectWalletScreen.css';
 // Storage keys for auth flow state
 const PENDING_NONCE_KEY = 'soltag_pending_nonce';
 const AUTH_STEP_KEY = 'soltag_auth_step';
-const AUTH_METHOD_KEY = 'soltag_auth_method'; // 'mwa' or 'deeplink'
 
 export default function ConnectWalletScreen() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { connected, publicKey, signMessage, connecting } = useWallet();
-    const { setVisible } = useWalletModal();
+    const { connected, publicKey, signMessage, connecting, wallets, select } = useWallet();
+    useWalletModal(); // Keep provider active but don't use setVisible
 
     // We'll use a local ref or state if needed for pending, but currently redundant
     // because App root handles auth navigation.
@@ -41,9 +38,6 @@ export default function ConnectWalletScreen() {
 
     const isMWASupported = isMWAAvailable();
     const isAndroid = isAndroidDevice();
-
-    // Ref to prevent double-initialization of MWA flow
-    const mwaInProgress = useRef(false);
 
     const login = useAuthStore(state => state.login);
 
@@ -119,64 +113,6 @@ export default function ConnectWalletScreen() {
         handleCallback();
     }, [location, navigate, login]);
 
-    // Perform MWA authentication (Primary Path)
-    const performMWAAuth = useCallback(async () => {
-        if (mwaInProgress.current) return;
-
-        try {
-            mwaInProgress.current = true;
-            setIsAuthenticating(true);
-            setAuthMethod('mwa');
-            setAuthError(null);
-            setStatusMessage('Opening mobile wallet...');
-
-            const nonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-            const messageToSign = `Sign this message to authenticate with Soltag: ${nonce}`;
-
-            console.log('[Auth] [MWA] Initiating native MWA transact...');
-            const mwaResult = await authenticateWithMWA(messageToSign);
-
-            if (!mwaResult) {
-                // If MWA fails or is cancelled, we fall back to deep-link on Android
-                if (isAndroid) {
-                    console.log('[Auth] [MWA] Failed or unsupported. Falling back to deep-link...');
-                    handleDeepLinkFallback();
-                } else {
-                    throw new Error('Mobile wallet adapter interaction failed');
-                }
-                return;
-            }
-
-            setStatusMessage('Verifying credentials...');
-            const { publicKey: walletAddress, signature } = mwaResult;
-
-            const result = await signInWithWallet(walletAddress, signature, nonce);
-
-            if (result.ok) {
-                await login(walletAddress, 'Explorer', result.token || 'mwa_active');
-                navigate('/home');
-            } else {
-                setAuthError(result.error || 'Identity verification failed');
-            }
-        } catch (err) {
-            console.error('[Auth] [Error] MWA path failed:', err);
-            setAuthError(err instanceof Error ? err.message : 'Wallet connection failed');
-        } finally {
-            setIsAuthenticating(false);
-            mwaInProgress.current = false;
-        }
-    }, [navigate, isAndroid, login]);
-
-    const handleDeepLinkFallback = () => {
-        console.log('[Auth] [Fallback] Starting Phantom deep-link flow');
-        localStorage.setItem(AUTH_STEP_KEY, 'connecting');
-        localStorage.setItem(AUTH_METHOD_KEY, 'deeplink');
-        setIsAuthenticating(true);
-        setAuthMethod('deeplink');
-        setStatusMessage('Redirecting to Phantom...');
-        connectToPhantom();
-    };
-
     // Standard Wallet Adapter Auth (Desktop/iOS)
     const performAdapterAuth = useCallback(async () => {
         if (!connected || !publicKey || !signMessage || isAuthenticating) return;
@@ -223,23 +159,23 @@ export default function ConnectWalletScreen() {
         };
         checkConnection();
     }, [connected, publicKey, isMWASupported, isAndroid, performAdapterAuth, isAuthenticating]);
-    const handleConnectClick = useCallback(() => {
-        setAuthError(null);
-
-        if (isMWASupported) {
-            performMWAAuth();
-        } else if (isAndroid) {
-            handleDeepLinkFallback();
-        } else {
-            // Desktop/iOS
-            setVisible(true);
-        }
-    }, [isMWASupported, isAndroid, performMWAAuth, setVisible]);
 
     const handleGuestLogin = useCallback(async () => {
         await login('guest_explorer_mode', 'Guest', 'guest_mode_active');
         navigate('/home');
     }, [navigate, login]);
+
+    // Handle individual wallet selection
+    const handleWalletSelect = useCallback(async (wallet: WalletType) => {
+        try {
+            setAuthError(null);
+            select(wallet.adapter.name);
+            // The useEffect for connected will handle the auth flow
+        } catch (err) {
+            console.error('[Auth] Wallet selection failed:', err);
+            setAuthError('Failed to select wallet');
+        }
+    }, [select]);
 
     const isLoading = connecting || isAuthenticating;
 
@@ -265,17 +201,45 @@ export default function ConnectWalletScreen() {
                         </div>
                     ) : (
                         <div className="wallet-options">
-                            <button
-                                className="solana-wallet-button custom-connect-btn"
-                                onClick={handleConnectClick}
-                                disabled={isLoading}
-                            >
-                                {isAndroid ? <Smartphone size={20} /> : <Wallet size={20} />}
-                                <span>
-                                    {isAndroid ? 'Connect Mobile Wallet' : 'Connect Wallet'}
-                                </span>
-                            </button>
+                            {/* Multi-Wallet Selector */}
+                            <div className="wallet-list">
+                                {wallets.filter(w => w.readyState === 'Installed' || w.readyState === 'Loadable').length > 0 ? (
+                                    wallets
+                                        .filter(w => w.readyState === 'Installed' || w.readyState === 'Loadable')
+                                        .map((wallet) => (
+                                            <button
+                                                key={wallet.adapter.name}
+                                                className="wallet-option-btn"
+                                                onClick={() => handleWalletSelect(wallet)}
+                                                disabled={isLoading}
+                                            >
+                                                <img
+                                                    src={wallet.adapter.icon}
+                                                    alt={wallet.adapter.name}
+                                                    className="wallet-icon"
+                                                />
+                                                <span>{wallet.adapter.name}</span>
+                                                <ExternalLink size={16} className="wallet-arrow" />
+                                            </button>
+                                        ))
+                                ) : (
+                                    <div className="no-wallets-message">
+                                        <p>No wallets detected.</p>
+                                        <p className="small">Install Phantom, Solflare, or Backpack to continue.</p>
+                                        <a
+                                            href="https://phantom.app/download"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="install-wallet-link"
+                                        >
+                                            <ExternalLink size={16} />
+                                            Install Phantom
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
 
+                            {/* Guest login */}
                             <button
                                 className="guest-login-btn"
                                 onClick={handleGuestLogin}
