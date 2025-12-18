@@ -25,6 +25,7 @@ export interface Event {
 export interface QRPayload {
     v: number;
     event_id: string;      // Matches Supabase events.id
+    event_pubkey: string;  // On-chain event public key
     asset: string;         // Mint address of the attendee asset (NFT)
     nonce: string;         // Random 128-bit challenge
     issued_at: number;     // Timestamp (Unix secs)
@@ -32,6 +33,7 @@ export interface QRPayload {
     zone: string;          // Human-readable zone string
     sig: string;           // Ed25519 signature from organizer
 }
+
 
 // Credential (SBT - Soulbound Token)
 export interface Credential {

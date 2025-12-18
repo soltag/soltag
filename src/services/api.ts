@@ -454,15 +454,16 @@ export async function mintAttendanceNFT(
         // Record in attendance table
         try {
             const profile = await getProfile(walletPubkey);
-            const event = await supabase.from('events').select('id').eq('event_pubkey', payload.event_pubkey).single();
+            const event = await supabase.from('events').select('id').eq('id', payload.event_id).single();
 
             if (profile && event.data) {
                 await supabase.from('attendance').insert({
                     user_id: profile.id,
                     event_id: event.data.id,
                     tx_sig: result.data.signature,
-                    zone_hash: payload.zone_code, // Simple hash for demo
+                    zone_hash: payload.zone, // Use zone string directly or hash it
                 });
+
 
                 // Also create a notification
                 await supabase.from('notifications').insert({

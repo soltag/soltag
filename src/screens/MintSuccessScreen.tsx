@@ -1,18 +1,15 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Eye, Share2, Home, Shield } from 'lucide-react';
 
-import type { QRPayload } from '../types';
 import './MintSuccessScreen.css';
 
 export default function MintSuccessScreen() {
     const navigate = useNavigate();
     const location = useLocation();
-    const qrPayload = location.state?.qrPayload as QRPayload | undefined;
     const txSignature = location.state?.txSignature as string | undefined;
     const isSeekerData = location.state?.isSeeker as boolean | undefined;
 
-
-    const eventName = qrPayload?.meta?.name || 'Event';
+    const eventName = 'Soltag Event';
 
     return (
         <div className="success-screen">

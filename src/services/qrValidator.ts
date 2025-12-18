@@ -21,7 +21,7 @@ export interface ValidationResult {
 
 // QR Schema for validation
 const QR_SCHEMA = {
-    requiredFields: ['v', 'event_id', 'asset', 'nonce', 'issued_at', 'expires_at', 'zone', 'sig'],
+    requiredFields: ['v', 'event_id', 'event_pubkey', 'asset', 'nonce', 'issued_at', 'expires_at', 'zone', 'sig'],
     version: 1,
     maxPayloadSize: 2048, // bytes
     maxNonceAge: 300000, // 5 minutes in ms
@@ -151,6 +151,7 @@ export function buildSignatureMessage(payload: QRPayload): string {
     return JSON.stringify({
         v: payload.v,
         event_id: payload.event_id,
+        event_pubkey: payload.event_pubkey,
         asset: payload.asset,
         nonce: payload.nonce,
         issued_at: payload.issued_at,
@@ -158,6 +159,7 @@ export function buildSignatureMessage(payload: QRPayload): string {
         zone: payload.zone,
     });
 }
+
 
 
 /**

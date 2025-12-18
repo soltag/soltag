@@ -78,7 +78,8 @@ export default function VerifyScanScreen() {
             // 2. Validate Location (Zone)
 
             if (result.payload) {
-                const zoneResult = await verifyZone([result.payload.zone_code]);
+                const zoneResult = await verifyZone([result.payload.zone]);
+
                 if (isCancelled) return;
 
                 const locationStatus = zoneResult.status === 'valid' ? 'valid' : 'mismatch';
@@ -167,7 +168,8 @@ export default function VerifyScanScreen() {
             <div className="verify-content animate-slide-up">
                 {/* Event info from QR */}
                 <div className="verify-event-card">
-                    <h2>{qrPayload?.meta?.name || 'Event'}</h2>
+                    <h2>Soltag Event</h2>
+
                     <p className="verify-event-meta">
                         Scanned from event QR code
                     </p>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import EventCard from '../components/EventCard';
-import { ledgerService } from '../services/ledgerService';
+import { getEvents } from '../services/api';
+
 import { getEventStatus } from '../data/mockData';
 import type { Event } from '../types';
 import './EventsListScreen.css';
@@ -13,8 +14,9 @@ export default function EventsListScreen() {
     const [events, setEvents] = useState<Event[]>([]);
 
     useEffect(() => {
-        ledgerService.getEvents().then(setEvents);
+        getEvents().then(setEvents);
     }, []);
+
 
     const filteredEvents = events.filter(event => {
         const status = getEventStatus(event);

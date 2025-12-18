@@ -29,7 +29,8 @@ export default function ConfirmMintScreen() {
         }
     }, [publicKey, navigate]);
 
-    const eventName = qrPayload?.meta?.name || 'Event';
+    const eventName = 'Soltag Event'; // Simplified for now, or fetch from state/SB
+
 
     useEffect(() => {
         const checkSeekerStatus = async () => {
@@ -52,8 +53,9 @@ export default function ConfirmMintScreen() {
             const transaction = await buildCheckInTransaction(
                 publicKey,
                 eventPubkey,
-                qrPayload.zone_code
+                qrPayload.zone
             );
+
 
             // Step 5: Wallet signing flow
             setStatusText('Please sign in your wallet');
@@ -78,8 +80,9 @@ export default function ConfirmMintScreen() {
                     signature,
                     publicKey.toBase58(),
                     eventData.id,
-                    qrPayload.zone_code
+                    qrPayload.zone
                 );
+
 
                 if (!syncResult.ok) {
                     console.error('Sync failed, but on-chain TX succeeded:', syncResult.error);

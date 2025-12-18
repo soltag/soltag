@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trophy, Crown, RefreshCw, Medal } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { ledgerService } from '../services/ledgerService';
+import { getCredentials } from '../services/api';
+import { useWallet } from '@solana/wallet-adapter-react';
+
 import './LeaderboardScreen.css';
 
 interface LeaderboardEntry {
@@ -31,13 +33,18 @@ const mockLeaderboard: LeaderboardEntry[] = [
 
 export default function LeaderboardScreen() {
     const navigate = useNavigate();
+    const { publicKey } = useWallet();
+
     const [activeTab, setActiveTab] = useState<'global' | 'month'>('global');
     const [loading, setLoading] = useState(false);
     const [attendanceCount, setAttendanceCount] = useState(18); // Default mock
 
     useEffect(() => {
-        ledgerService.getAttendanceCount().then(setAttendanceCount);
-    }, []);
+        if (publicKey) {
+            getCredentials(publicKey.toBase58()).then(creds => setAttendanceCount(creds.length));
+        }
+    }, [publicKey]);
+
 
     // Merge actual attendance into mock data for display
     const updatedLeaderboard = mockLeaderboard.map(entry =>

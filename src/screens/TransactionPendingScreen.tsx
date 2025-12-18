@@ -3,8 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, Copy, CheckCircle, AlertCircle } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { mintAttendanceNFT } from '../services/api';
-import { ledgerService } from '../services/ledgerService';
-import { mockEvents } from '../data/mockData';
+
 import type { QRPayload } from '../types';
 import './TransactionPendingScreen.css';
 
@@ -45,21 +44,9 @@ export default function TransactionPendingScreen() {
                 if (result.ok) {
                     setTxSignature(result.signature);
 
-                    // Find the event to get the human-readable name if possible
-                    const event = mockEvents.find(e => e.event_pubkey === qrPayload.event_pubkey);
+                    // 3. Register in local ledger (Already handled in mintAttendanceNFT)
 
-                    // 3. Register in local ledger
-                    await ledgerService.addCredential({
-                        id: `cred-${Date.now()}`,
-                        owner_pubkey: publicKey.toBase58(),
-                        event_id: event?.id || qrPayload.event_pubkey,
-                        event_name: event?.name || 'Verified Attendance',
-                        zone_hash: qrPayload.zone_code,
-                        issued_at: Date.now(),
-                        tx_sig: result.signature,
-                        category: 'conference',
-                        transferable: false
-                    });
+
 
                     if (isCancelled) return;
                     setStatus('confirming');
