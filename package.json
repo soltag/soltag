@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.2.5",
@@ -21,11 +23,14 @@
     "@solana/wallet-adapter-wallets": "^0.19.37",
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.88.0",
+    "bs58": "^6.0.0",
     "buffer": "^6.0.3",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.1",
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1",
     "vite-plugin-node-polyfills": "^0.24.0"
   },
   "devDependencies": {

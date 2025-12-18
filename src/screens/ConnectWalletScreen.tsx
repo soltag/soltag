@@ -1,58 +1,197 @@
-import { useEffect, useState, useCallback } from 'react';
-
-import { useNavigate } from 'react-router-dom';
-import { HelpCircle, Wallet, Loader2, Smartphone } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { HelpCircle, Wallet, Loader2, Smartphone, AlertCircle, User } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { requestAuthNonce, signInWithWallet } from '../services/api';
+import { signInWithWallet } from '../services/api';
 import {
     isMWAAvailable,
     authenticateWithMWA,
     getStoredWalletPubkey
 } from '../services/mwaService';
+import {
+    connectToPhantom,
+    signMessageWithPhantom,
+    handleConnectCallback,
+    handleSignMessageCallback,
+    getPhantomPublicKey,
+    isAndroidDevice,
+} from '../services/phantomDeeplink';
 
 import './ConnectWalletScreen.css';
 
+// Storage keys for auth flow state
+const PENDING_NONCE_KEY = 'soltag_pending_nonce';
+const AUTH_STEP_KEY = 'soltag_auth_step';
+const AUTH_METHOD_KEY = 'soltag_auth_method'; // 'mwa' or 'deeplink'
+
 export default function ConnectWalletScreen() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { connected, publicKey, signMessage, connecting } = useWallet();
     const { setVisible } = useWalletModal();
+
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
     const [pendingAuth, setPendingAuth] = useState(false);
-    const [isMWAMode, setIsMWAMode] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('');
+    const [authMethod, setAuthMethod] = useState<'mwa' | 'deeplink' | 'adapter' | null>(null);
 
-    // Check if we should use direct MWA (Android) or wallet-adapter
-    const shouldUseMWA = isMWAAvailable();
+    const isMWASupported = isMWAAvailable();
+    const isAndroid = isAndroidDevice();
 
-    // Perform Sign-in-with-Solana after wallet is connected (wallet-adapter path)
-    const performAuth = useCallback(async () => {
-        if (!connected || !publicKey || !signMessage || isAuthenticating) {
-            return;
+    // Ref to prevent double-initialization of MWA flow
+    const mwaInProgress = useRef(false);
+
+    // Handle Phantom deep-link callbacks
+    useEffect(() => {
+        const handleCallback = async () => {
+            const search = location.search;
+            const fullUrl = window.location.href;
+
+            // Check if this is a Phantom callback (either in search or full URL)
+            if (!fullUrl.includes('soltag://phantom/') && !search.includes('data=')) {
+                return;
+            }
+
+            console.log('[Auth] [Callback] Handling callback. Search:', search, 'Full URL:', fullUrl);
+            const urlParams = new URLSearchParams(search || fullUrl.split('?')[1] || '');
+
+            try {
+                setIsAuthenticating(true);
+                setAuthMethod('deeplink');
+
+                if (fullUrl.includes('phantom/connect')) {
+                    const result = handleConnectCallback(urlParams);
+                    console.log('[Auth] [Deeplink] Connected:', result.publicKey);
+
+                    const nonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                    localStorage.setItem(PENDING_NONCE_KEY, nonce);
+                    localStorage.setItem(AUTH_STEP_KEY, 'signing');
+
+                    setStatusMessage('Requesting signature via Phantom...');
+
+                    // Small delay for UI smoothness
+                    setTimeout(() => {
+                        signMessageWithPhantom(`Sign this message to authenticate with Soltag: ${nonce}`);
+                    }, 800);
+
+                } else if (fullUrl.includes('phantom/signMessage')) {
+                    const signature = handleSignMessageCallback(urlParams);
+                    const nonce = localStorage.getItem(PENDING_NONCE_KEY);
+                    const walletAddress = getPhantomPublicKey();
+
+                    if (!nonce || !walletAddress) {
+                        throw new Error('Authentication state lost. Please try again.');
+                    }
+
+                    console.log('[Auth] [Deeplink] Signature received, verifying...');
+                    setStatusMessage('Verifying signature...');
+
+                    const result = await signInWithWallet(walletAddress, signature, nonce);
+
+                    if (result.ok) {
+                        localStorage.setItem('soltag_wallet_pubkey', walletAddress);
+                        localStorage.setItem('soltag_username', 'Explorer');
+                        localStorage.removeItem(PENDING_NONCE_KEY);
+                        localStorage.removeItem(AUTH_STEP_KEY);
+                        navigate('/home');
+                    } else {
+                        throw new Error(result.error || 'Server authentication failed');
+                    }
+                }
+            } catch (error) {
+                console.error('[Auth] [Error] Deep-link failure:', error);
+                setAuthError(error instanceof Error ? error.message : 'Deep-link authentication failed');
+                localStorage.removeItem(PENDING_NONCE_KEY);
+                localStorage.removeItem(AUTH_STEP_KEY);
+            } finally {
+                setIsAuthenticating(false);
+                setStatusMessage('');
+                // Use history API to clean URL without triggerring re-navigation if possible
+                window.history.replaceState({}, '', '/connect');
+            }
+        };
+
+        handleCallback();
+    }, [location, navigate]);
+
+    // Perform MWA authentication (Primary Path)
+    const performMWAAuth = useCallback(async () => {
+        if (mwaInProgress.current) return;
+
+        try {
+            mwaInProgress.current = true;
+            setIsAuthenticating(true);
+            setAuthMethod('mwa');
+            setAuthError(null);
+            setStatusMessage('Opening mobile wallet...');
+
+            const nonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            const messageToSign = `Sign this message to authenticate with Soltag: ${nonce}`;
+
+            console.log('[Auth] [MWA] Initiating native MWA transact...');
+            const mwaResult = await authenticateWithMWA(messageToSign);
+
+            if (!mwaResult) {
+                // If MWA fails or is cancelled, we fall back to deep-link on Android
+                if (isAndroid) {
+                    console.log('[Auth] [MWA] Failed or unsupported. Falling back to deep-link...');
+                    handleDeepLinkFallback();
+                } else {
+                    throw new Error('Mobile wallet adapter interaction failed');
+                }
+                return;
+            }
+
+            setStatusMessage('Verifying credentials...');
+            const { publicKey: walletAddress, signature } = mwaResult;
+
+            const result = await signInWithWallet(walletAddress, signature, nonce);
+
+            if (result.ok) {
+                localStorage.setItem('soltag_wallet_pubkey', walletAddress);
+                localStorage.setItem('soltag_username', 'Explorer');
+                navigate('/home');
+            } else {
+                setAuthError(result.error || 'Identity verification failed');
+            }
+        } catch (err) {
+            console.error('[Auth] [Error] MWA path failed:', err);
+            setAuthError(err instanceof Error ? err.message : 'Wallet connection failed');
+        } finally {
+            setIsAuthenticating(false);
+            mwaInProgress.current = false;
         }
+    }, [navigate, isAndroid]);
 
-        // If we're already authenticated for this wallet, just move on
-        const savedToken = localStorage.getItem('soltag_auth_token');
-        const savedWallet = localStorage.getItem('soltag_wallet_pubkey');
+    const handleDeepLinkFallback = () => {
+        console.log('[Auth] [Fallback] Starting Phantom deep-link flow');
+        localStorage.setItem(AUTH_STEP_KEY, 'connecting');
+        localStorage.setItem(AUTH_METHOD_KEY, 'deeplink');
+        setIsAuthenticating(true);
+        setAuthMethod('deeplink');
+        setStatusMessage('Redirecting to Phantom...');
+        connectToPhantom();
+    };
 
-        if (savedToken && savedWallet === publicKey.toBase58()) {
-            navigate('/home');
-            return;
-        }
+    // Standard Wallet Adapter Auth (Desktop/iOS)
+    const performAdapterAuth = useCallback(async () => {
+        if (!connected || !publicKey || !signMessage || isAuthenticating) return;
 
         try {
             setIsAuthenticating(true);
+            setAuthMethod('adapter');
             setAuthError(null);
+            setStatusMessage('Awaiting signature...');
 
-            // 1. Get Nonce
             const address = publicKey.toBase58();
-            const nonce = await requestAuthNonce(address);
-
-            // 2. Sign Message
+            const nonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
             const message = new TextEncoder().encode(`Sign this message to authenticate with Soltag: ${nonce}`);
-            const signature = await signMessage(message);
 
-            // 3. Verify & Sign In
+            const signature = await signMessage(message);
+            setStatusMessage('Verifying...');
+
             const result = await signInWithWallet(address, signature, nonce);
 
             if (result.ok) {
@@ -63,76 +202,19 @@ export default function ConnectWalletScreen() {
                 setAuthError(result.error);
             }
         } catch (err) {
-            console.error('Authentication failed:', err);
-            setAuthError('Signature request cancelled or failed.');
+            console.error('[Auth] [Error] Adapter path failed:', err);
+            setAuthError('Signature request was cancelled.');
         } finally {
             setIsAuthenticating(false);
             setPendingAuth(false);
         }
     }, [connected, publicKey, signMessage, isAuthenticating, navigate]);
 
-    // Perform MWA authentication (direct protocol path)
-    // Uses single transact() for both authorize AND signMessage
-    const performMWAAuth = useCallback(async () => {
-        try {
-            setIsAuthenticating(true);
-            setIsMWAMode(true);
-            setAuthError(null);
-
-            // Step 1: Get nonce first (before opening wallet)
-            // We'll use a temporary address for the nonce request
-            console.log('[ConnectWallet] Getting auth nonce...');
-
-            // For MWA, we do a combined flow:
-            // 1. First get a generic nonce (or use timestamp-based)
-            // 2. Open wallet, authorize, AND sign in single session
-
-            // Use timestamp-based nonce for initial request
-            const tempNonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-            const messageToSign = `Sign this message to authenticate with Soltag: ${tempNonce}`;
-
-            console.log('[ConnectWallet] Starting combined MWA auth + sign...');
-            const mwaResult = await authenticateWithMWA(messageToSign);
-
-            if (!mwaResult) {
-                throw new Error('Wallet connection was cancelled or failed');
-            }
-
-            const { publicKey: walletAddress, signature } = mwaResult;
-            console.log('[ConnectWallet] MWA connected and signed:', walletAddress);
-
-
-            // Verify with server using the temp nonce (server accepts any valid nonce format)
-            const result = await signInWithWallet(walletAddress, signature, tempNonce);
-
-            if (result.ok) {
-                localStorage.setItem('soltag_wallet_pubkey', walletAddress);
-                localStorage.setItem('soltag_username', 'Explorer');
-                navigate('/home');
-            } else {
-                // Server might reject temp nonce, that's expected in some cases
-                console.log('[ConnectWallet] Server auth result:', result);
-                setAuthError(result.error || 'Authentication failed. Please try again.');
-            }
-        } catch (err) {
-            console.error('[ConnectWallet] MWA auth failed:', err);
-            setAuthError(
-                err instanceof Error
-                    ? err.message
-                    : 'Wallet connection failed. Please try again.'
-            );
-        } finally {
-            setIsAuthenticating(false);
-            setIsMWAMode(false);
-        }
-    }, [navigate]);
-
-    // When wallet connects and we have a pending auth, perform it (wallet-adapter path)
     useEffect(() => {
-        if (connected && publicKey && pendingAuth && !shouldUseMWA) {
-            performAuth();
+        if (connected && publicKey && pendingAuth && !isMWASupported && !isAndroid) {
+            performAdapterAuth();
         }
-    }, [connected, publicKey, pendingAuth, performAuth, shouldUseMWA]);
+    }, [connected, publicKey, pendingAuth, performAdapterAuth, isMWASupported, isAndroid]);
 
     // Check for existing auth on mount
     useEffect(() => {
@@ -144,25 +226,26 @@ export default function ConnectWalletScreen() {
         }
     }, [navigate]);
 
-    // Handle wallet connection
-    const handleConnectWallet = useCallback(async () => {
+    const handleConnectClick = useCallback(() => {
         setAuthError(null);
 
-        if (shouldUseMWA) {
-            // Android: Use direct MWA protocol
-            console.log('[ConnectWallet] Using direct MWA protocol');
-            await performMWAAuth();
+        if (isMWASupported) {
+            performMWAAuth();
+        } else if (isAndroid) {
+            handleDeepLinkFallback();
         } else {
-            // Desktop/iOS: Use wallet-adapter modal
-            console.log('[ConnectWallet] Using wallet-adapter modal');
+            // Desktop/iOS
             setVisible(true);
             setPendingAuth(true);
         }
-    }, [shouldUseMWA, performMWAAuth, setVisible]);
+    }, [isMWASupported, isAndroid, performMWAAuth, setVisible]);
 
-    const handleHelpClick = () => {
-        navigate('/help');
-    };
+    const handleGuestLogin = useCallback(() => {
+        localStorage.setItem('soltag_wallet_pubkey', 'guest_explorer_mode');
+        localStorage.setItem('soltag_username', 'Guest');
+        localStorage.setItem('soltag_auth_token', 'guest_mode_active');
+        navigate('/home');
+    }, [navigate]);
 
     const isLoading = connecting || isAuthenticating;
 
@@ -178,45 +261,55 @@ export default function ConnectWalletScreen() {
                     {isLoading ? (
                         <div className="auth-loading">
                             <Loader2 className="animate-spin" size={32} />
-                            <p>
-                                {isMWAMode
-                                    ? 'Opening wallet...'
-                                    : connecting
-                                        ? 'Connecting wallet...'
-                                        : 'Authenticating with wallet...'}
-                            </p>
-                        </div>
-                    ) : connected && !shouldUseMWA ? (
-                        <div className="auth-loading">
-                            <Loader2 className="animate-spin" size={32} />
-                            <p>Completing authentication...</p>
+                            <p>{statusMessage || 'Connecting...'}</p>
+                            {authMethod === 'mwa' && (
+                                <span className="auth-hint">Native Mobile Wallet Adapter</span>
+                            )}
+                            {authMethod === 'deeplink' && (
+                                <span className="auth-hint">Phantom Deep Link Flow</span>
+                            )}
                         </div>
                     ) : (
-                        <button
-                            className="solana-wallet-button custom-connect-btn"
-                            onClick={handleConnectWallet}
-                            disabled={isLoading}
-                        >
-                            {shouldUseMWA ? <Smartphone size={20} /> : <Wallet size={20} />}
-                            <span>
-                                {shouldUseMWA ? 'Connect Mobile Wallet' : 'Connect Wallet'}
-                            </span>
-                        </button>
+                        <div className="wallet-options">
+                            <button
+                                className="solana-wallet-button custom-connect-btn"
+                                onClick={handleConnectClick}
+                                disabled={isLoading}
+                            >
+                                {isAndroid ? <Smartphone size={20} /> : <Wallet size={20} />}
+                                <span>
+                                    {isAndroid ? 'Connect Mobile Wallet' : 'Connect Wallet'}
+                                </span>
+                            </button>
+
+                            <button
+                                className="guest-login-btn"
+                                onClick={handleGuestLogin}
+                                disabled={isLoading}
+                            >
+                                <User size={20} />
+                                <span>Explore as Guest</span>
+                            </button>
+                        </div>
                     )}
                 </div>
 
                 {authError && (
                     <div className="auth-error animate-fade-in">
+                        <AlertCircle size={16} />
                         <p>{authError}</p>
                     </div>
                 )}
 
-
                 <div className="security-note">
-                    <p>Secured by Solana Mobile Wallet Adapter</p>
+                    <p>
+                        {isAndroid
+                            ? "Optimized for Solana Seeker & Phantom"
+                            : "Secured by Solana Mobile Stack"}
+                    </p>
                 </div>
 
-                <button className="help-link" onClick={handleHelpClick}>
+                <button className="help-link" onClick={() => navigate('/help')}>
                     <HelpCircle size={16} />
                     <span>How wallets work</span>
                 </button>

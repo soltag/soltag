@@ -1,4 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { App as CapApp } from '@capacitor/app';
 
 // Entry & Onboarding
 import SplashScreen from './screens/SplashScreen';
@@ -30,6 +32,55 @@ import HelpPrivacyScreen from './screens/HelpPrivacyScreen';
 import AppLock from './components/AppLock';
 
 function App() {
+    console.log('[App] [Lifecycle] Rendering App component...');
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        console.log('[App] [Lifecycle] App mounted, setting up listeners');
+        // Global listener for deep-links
+        let urlListener: any;
+        let stateListener: any;
+
+        const setupListeners = async () => {
+            try {
+                urlListener = await CapApp.addListener('appUrlOpen', (event) => {
+                    console.log('[App] [Lifecycle] Deep link received:', event.url);
+
+                    // If it's a soltag callback, handle navigation
+                    if (event.url.includes('soltag://')) {
+                        try {
+                            const url = new URL(event.url);
+                            const search = url.search || '';
+
+                            console.log('[App] [Routing] Navigating to:', `/connect${search}`);
+                            navigate(`/connect${search}`, { replace: true });
+                        } catch (e) {
+                            console.error('[App] [Error] Failed to parse deep link URL:', e);
+                        }
+                    }
+                });
+
+                stateListener = await CapApp.addListener('appStateChange', (state) => {
+                    console.log('[App] [Lifecycle] App state changed to:', state.isActive ? 'FOREGROUND' : 'BACKGROUND');
+                });
+            } catch (err) {
+                console.error('[App] [Error] Failed to setup listeners:', err);
+            }
+        };
+
+        setupListeners();
+
+        return () => {
+            console.log('[App] [Lifecycle] App unmounting, cleaning up listeners');
+            if (urlListener && typeof urlListener.remove === 'function') {
+                urlListener.remove();
+            }
+            if (stateListener && typeof stateListener.remove === 'function') {
+                stateListener.remove();
+            }
+        };
+    }, [navigate]);
+
     return (
         <AppLock>
             <Routes>
