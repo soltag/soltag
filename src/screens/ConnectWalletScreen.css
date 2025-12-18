@@ -151,3 +151,32 @@
 .help-link:hover {
     color: var(--color-text-secondary);
 }
+
+/* Custom connect wallet button */
+.custom-connect-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    height: 56px;
+    background: linear-gradient(135deg, var(--color-accent-purple), var(--color-accent-blue));
+    border: none;
+    border-radius: var(--radius-full);
+    color: white;
+    font-family: var(--font-family);
+    font-weight: 600;
+    font-size: var(--font-size-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.custom-connect-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(88, 28, 135, 0.4);
+}
+
+.custom-connect-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
