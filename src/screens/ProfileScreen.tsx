@@ -1,12 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Copy, CheckCircle, Download, LogOut, Edit2, Camera, X } from 'lucide-react';
+import { Copy, CheckCircle, Download, LogOut, Edit2, Camera, X, Bell } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import CredentialCard from '../components/CredentialCard';
-import { ledgerService } from '../services/ledgerService';
-import { shortenAddress } from '../data/mockData';
-import type { Credential } from '../types';
+import { getCredentials, getUserNotifications, getProfile, upsertProfile, markNotificationRead } from '../services/api';
+import { uploadAvatar } from '../services/storageService';
+import { shortenAddress, formatDateTime } from '../data/mockData';
+import type { Credential, Notification } from '../types';
+
+
+
 import './ProfileScreen.css';
 
 type Filter = 'all' | 'conference' | 'gym' | 'ticket';
@@ -14,25 +18,48 @@ type Filter = 'all' | 'conference' | 'gym' | 'ticket';
 export default function ProfileScreen() {
     const navigate = useNavigate();
     const { publicKey, disconnect } = useWallet();
+    const [view, setView] = useState<'credentials' | 'notifications'>('credentials');
+
 
     // Get real public key if connected, otherwise fallback to stored (or empty)
     const walletAddress = publicKey ? publicKey.toBase58() : localStorage.getItem('soltag_wallet_pubkey') || '';
 
     const [credentials, setCredentials] = useState<Credential[]>([]);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
     const [activeFilter, setActiveFilter] = useState<Filter>('all');
     const [copied, setCopied] = useState(false);
 
+
     // State for profile editing
     const [showEditModal, setShowEditModal] = useState(false);
-    const [username, setUsername] = useState(localStorage.getItem('soltag_username') || '');
-    const [avatarUrl, setAvatarUrl] = useState(localStorage.getItem('soltag_avatar') || '');
-    const [tempUsername, setTempUsername] = useState(username);
-    const [tempAvatar, setTempAvatar] = useState(avatarUrl);
+    const [username, setUsername] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState('');
+    const [tempUsername, setTempUsername] = useState('');
+    const [tempAvatar, setTempAvatar] = useState('');
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+
+
     useEffect(() => {
-        ledgerService.getCredentials().then(setCredentials);
-    }, []);
+        if (walletAddress) {
+            getCredentials(walletAddress).then(setCredentials);
+            getUserNotifications(walletAddress).then(setNotifications);
+            getProfile(walletAddress).then(profile => {
+                if (profile) {
+                    setUsername(profile.display_name || '');
+                    setAvatarUrl(profile.avatar_url || '');
+                    setTempUsername(profile.display_name || '');
+                    setTempAvatar(profile.avatar_url || '');
+                }
+            });
+        }
+    }, [walletAddress]);
+
+
+
 
     const filteredCredentials = credentials.filter(c => {
         if (activeFilter === 'all') return true;
@@ -55,6 +82,7 @@ export default function ProfileScreen() {
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            setSelectedFile(file);
             const reader = new FileReader();
             reader.onloadend = () => {
                 setTempAvatar(reader.result as string);
@@ -63,13 +91,49 @@ export default function ProfileScreen() {
         }
     };
 
-    const handleSaveProfile = () => {
-        setUsername(tempUsername);
-        setAvatarUrl(tempAvatar);
-        localStorage.setItem('soltag_username', tempUsername);
-        localStorage.setItem('soltag_avatar', tempAvatar);
-        setShowEditModal(false);
+    const handleSaveProfile = async () => {
+        if (!walletAddress) return;
+        setIsSaving(true);
+
+        try {
+            let finalAvatarUrl = tempAvatar;
+
+            // 1. Upload new avatar if selected
+            if (selectedFile) {
+                const uploadedUrl = await uploadAvatar(walletAddress, selectedFile);
+                if (uploadedUrl) {
+                    finalAvatarUrl = uploadedUrl;
+                }
+            }
+
+            // 2. Update profile in DB
+            await upsertProfile({
+                wallet_address: walletAddress,
+                display_name: tempUsername,
+                avatar_url: finalAvatarUrl,
+            });
+
+            // 3. Update local state
+            setUsername(tempUsername);
+            setAvatarUrl(finalAvatarUrl);
+            setShowEditModal(false);
+            setSelectedFile(null);
+
+            // 4. Success feedback
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 3000);
+            console.log('[Profile] Saved successfully');
+
+            // We could add a toast here. For now, we'll mark the profile as updated.
+        } catch (error) {
+            console.error('Failed to save profile:', error);
+            alert('Failed to save profile. Please ensure you have run the init_storage.sql script in your Supabase Dashboard.');
+        } finally {
+            setIsSaving(false);
+        }
     };
+
+
 
     const handleCancelEdit = () => {
         setTempUsername(username);
@@ -89,6 +153,11 @@ export default function ProfileScreen() {
         { key: 'ticket', label: 'Tickets' },
     ];
 
+    const handleMarkAsRead = async (id: string) => {
+        await markNotificationRead(id);
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    };
+
     return (
         <div className="profile-screen">
             <div className="profile-content">
@@ -98,6 +167,7 @@ export default function ProfileScreen() {
                         <LogOut size={18} />
                     </button>
                 </header>
+
 
                 <div className="user-profile-section animate-slide-up">
                     <div className="profile-avatar-container">
@@ -147,42 +217,105 @@ export default function ProfileScreen() {
                     </div>
                 </div>
 
-                {/* Credentials section */}
-                <section className="credentials-section animate-slide-up">
-                    <div className="section-header">
-                        <h2>Credentials</h2>
-                        <button className="export-btn">
-                            <Download size={16} />
-                            <span>Export</span>
-                        </button>
-                    </div>
+                {/* Tabs */}
+                <div className="profile-tabs animate-slide-up">
+                    <button
+                        className={`tab-btn ${view === 'credentials' ? 'active' : ''}`}
+                        onClick={() => setView('credentials')}
+                    >
+                        Credentials
+                    </button>
+                    <button
+                        className={`tab-btn ${view === 'notifications' ? 'active' : ''}`}
+                        onClick={() => setView('notifications')}
+                    >
+                        Notifications {notifications.filter(n => !n.read).length > 0 && (
+                            <span className="unread-badge">{notifications.filter(n => !n.read).length}</span>
+                        )}
+                    </button>
+                </div>
 
-                    {/* Filters */}
-                    <div className="credential-filters">
-                        {filters.map(filter => (
-                            <button
-                                key={filter.key}
-                                className={`filter-btn ${activeFilter === filter.key ? 'active' : ''}`}
-                                onClick={() => setActiveFilter(filter.key)}
-                            >
-                                {filter.label}
+                {/* Success Toast */}
+                {showSuccess && (
+                    <div className="success-toast animate-slide-in">
+                        <CheckCircle size={18} />
+                        <span>Profile updated successfully!</span>
+                    </div>
+                )}
+
+
+                {/* Main section */}
+                {view === 'credentials' ? (
+                    <section className="credentials-section animate-slide-up">
+                        <div className="section-header">
+                            <h2>Credentials</h2>
+                            <button className="export-btn">
+                                <Download size={16} />
+                                <span>Export</span>
                             </button>
-                        ))}
-                    </div>
-
-                    {/* Credentials list */}
-                    <div className="credentials-grid">
-                        {filteredCredentials.map(credential => (
-                            <CredentialCard key={credential.id} credential={credential} />
-                        ))}
-                    </div>
-
-                    {filteredCredentials.length === 0 && (
-                        <div className="empty-credentials">
-                            <p>No credentials found</p>
                         </div>
-                    )}
-                </section>
+
+                        {/* Filters */}
+                        <div className="credential-filters">
+                            {filters.map(filter => (
+                                <button
+                                    key={filter.key}
+                                    className={`filter-btn ${activeFilter === filter.key ? 'active' : ''}`}
+                                    onClick={() => setActiveFilter(filter.key)}
+                                >
+                                    {filter.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Credentials list */}
+                        <div className="credentials-grid">
+                            {filteredCredentials.map(credential => (
+                                <CredentialCard key={credential.id} credential={credential} />
+                            ))}
+                        </div>
+
+                        {filteredCredentials.length === 0 && (
+                            <div className="empty-credentials">
+                                <p>No credentials found</p>
+                            </div>
+                        )}
+                    </section>
+                ) : (
+                    <section className="notifications-section animate-slide-up">
+                        <div className="section-header">
+                            <h2>Notifications</h2>
+                        </div>
+                        <div className="notifications-list">
+                            {notifications.length > 0 ? (
+                                notifications.map(notification => (
+                                    <div
+                                        key={notification.id}
+                                        className={`notification-item ${notification.read ? 'read' : 'unread'}`}
+                                        onClick={() => !notification.read && handleMarkAsRead(notification.id)}
+                                    >
+                                        <div className={`notification-icon ${notification.type}`}>
+                                            <Bell size={18} />
+                                        </div>
+                                        <div className="notification-content">
+                                            <div className="notification-header">
+                                                <h3 className="notification-title">{notification.title}</h3>
+                                                <span className="notification-time">{formatDateTime(notification.timestamp)}</span>
+                                            </div>
+                                            <p className="notification-message">{notification.message}</p>
+                                        </div>
+                                        {!notification.read && <div className="unread-dot" />}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="empty-notifications">
+                                    <p>No notifications yet</p>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+                )}
+
             </div>
 
             {/* Edit Profile Modal */}
@@ -238,13 +371,14 @@ export default function ProfileScreen() {
                         </div>
 
                         <div className="modal-actions">
-                            <button className="btn btn-secondary" onClick={handleCancelEdit}>
+                            <button className="btn btn-secondary" onClick={handleCancelEdit} disabled={isSaving}>
                                 Cancel
                             </button>
-                            <button className="btn btn-primary" onClick={handleSaveProfile}>
-                                Save Changes
+                            <button className="btn btn-primary" onClick={handleSaveProfile} disabled={isSaving}>
+                                {isSaving ? 'Saving...' : 'Save Changes'}
                             </button>
                         </div>
+
                     </div>
                 </div>
             )}

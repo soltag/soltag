@@ -98,6 +98,40 @@
     margin: 0 0 var(--spacing-sm);
 }
 
+.auth-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-xl);
+    background: var(--color-card-bg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    width: 100%;
+}
+
+.auth-loading p {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+.auth-error {
+    padding: var(--spacing-md);
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-md);
+    margin-top: var(--spacing-md);
+}
+
+.auth-error p {
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    margin: 0;
+}
+
+
 .help-link {
     display: flex;
     align-items: center;

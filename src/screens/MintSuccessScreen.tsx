@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle, Eye, Share2, Home } from 'lucide-react';
+import { CheckCircle, Eye, Share2, Home, Shield } from 'lucide-react';
+
 import type { QRPayload } from '../types';
 import './MintSuccessScreen.css';
 
@@ -7,6 +8,9 @@ export default function MintSuccessScreen() {
     const navigate = useNavigate();
     const location = useLocation();
     const qrPayload = location.state?.qrPayload as QRPayload | undefined;
+    const txSignature = location.state?.txSignature as string | undefined;
+    const isSeekerData = location.state?.isSeeker as boolean | undefined;
+
 
     const eventName = qrPayload?.meta?.name || 'Event';
 
@@ -26,8 +30,24 @@ export default function MintSuccessScreen() {
                 <h1 className="success-title">Attendance Recorded</h1>
                 <p className="success-event">{eventName}</p>
                 <p className="success-message">
-                    Your proof of presence credential has been minted to your wallet.
+                    Your proof of presence has been recorded on Solana.
                 </p>
+
+                {txSignature && (
+                    <div className="tx-status-card">
+                        <div className="tx-status-item">
+                            <span>Transaction Signature</span>
+                            <code>{txSignature.slice(0, 8)}...{txSignature.slice(-8)}</code>
+                        </div>
+                        {isSeekerData && (
+                            <div className="tx-status-item seeker-trust">
+                                <Shield size={14} />
+                                <span>Seeker Device Attested</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
 
                 {/* Credential preview */}
                 <div className="success-credential">

@@ -4,13 +4,19 @@ import { QrCode, ChevronRight, Trophy, Sparkles } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import CredentialCard from '../components/CredentialCard';
 import EventCard from '../components/EventCard';
-import { ledgerService } from '../services/ledgerService';
+import { getEvents, getCredentials } from '../services/api';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { getEventStatus } from '../data/mockData';
+
+
+
 import type { Credential, Event } from '../types';
 import './HomeScreen.css';
 
 export default function HomeScreen() {
     const navigate = useNavigate();
+    const { publicKey } = useWallet();
+
 
     const [credentials, setCredentials] = useState<Credential[]>([]);
     const [events, setEvents] = useState<Event[]>([]);
@@ -18,14 +24,16 @@ export default function HomeScreen() {
     useEffect(() => {
         const loadData = async () => {
             const [creds, evts] = await Promise.all([
-                ledgerService.getCredentials(),
-                ledgerService.getEvents()
+                publicKey ? getCredentials(publicKey.toBase58()) : Promise.resolve([]),
+                getEvents()
             ]);
             setCredentials(creds);
             setEvents(evts);
         };
         loadData();
-    }, []);
+    }, [publicKey]);
+
+
 
     const recentCredentials = credentials.slice(0, 3);
     const nearbyEvents = events.filter(e => getEventStatus(e) !== 'past').slice(0, 3);

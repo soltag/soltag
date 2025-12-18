@@ -21,11 +21,12 @@ export interface ValidationResult {
 
 // QR Schema for validation
 const QR_SCHEMA = {
-    requiredFields: ['v', 'event_pubkey', 'start_ts', 'end_ts', 'zone_code', 'nonce', 'sig'],
+    requiredFields: ['v', 'event_id', 'asset', 'nonce', 'issued_at', 'expires_at', 'zone', 'sig'],
     version: 1,
     maxPayloadSize: 2048, // bytes
     maxNonceAge: 300000, // 5 minutes in ms
 };
+
 
 /**
  * Parse and validate a raw QR code string
@@ -80,21 +81,22 @@ function validateSchema(payload: unknown): { valid: boolean; errors: string[] } 
     }
 
     // Type validation
-    if (typeof obj.v !== 'number' || obj.v !== QR_SCHEMA.version) {
-        errors.push(`Unsupported version: expected ${QR_SCHEMA.version}`);
+    if (typeof obj.event_id !== 'string' || obj.event_id.length < 8) {
+        errors.push('Invalid event_id format');
     }
 
-    if (typeof obj.event_pubkey !== 'string' || obj.event_pubkey.length < 32) {
-        errors.push('Invalid event_pubkey format');
+    if (typeof obj.asset !== 'string' || obj.asset.length < 32) {
+        errors.push('Invalid asset format');
     }
 
-    if (typeof obj.start_ts !== 'number' || typeof obj.end_ts !== 'number') {
+    if (typeof obj.issued_at !== 'number' || typeof obj.expires_at !== 'number') {
         errors.push('Invalid timestamp format');
     }
 
-    if (typeof obj.zone_code !== 'string' || obj.zone_code.length < 4) {
-        errors.push('Invalid zone_code format');
+    if (typeof obj.zone !== 'string' || obj.zone.length < 2) {
+        errors.push('Invalid zone format');
     }
+
 
     if (typeof obj.nonce !== 'string' || obj.nonce.length < 8) {
         errors.push('Invalid nonce format');
@@ -114,19 +116,20 @@ export async function verifySignature(
     payload: QRPayload,
     trustedEventKeys: string[]
 ): Promise<{ valid: boolean; error?: string }> {
-    // Check if event_pubkey is in trusted list
-    if (!trustedEventKeys.includes(payload.event_pubkey)) {
-        return { valid: false, error: 'Event authority not in trusted registry' };
-    }
+    // In the new model, we verify that the 'asset' pubkey belongs to a trusted event
+    // or the 'sig' is valid against fixed organizer authority.
+    // For now, we'll keep the mock logic but use the correct fields.
 
     try {
         const message = buildSignatureMessage(payload);
         const messageBytes = new TextEncoder().encode(message);
 
         const signatureBytes = bs58.decode(payload.sig);
-        const publicKeyBytes = bs58.decode(payload.event_pubkey);
+        // We assume the first trusted key is the organizer authority
+        const publicKeyBytes = bs58.decode(trustedEventKeys[0] || '');
 
         const isValid = ed25519.verify(signatureBytes, messageBytes, publicKeyBytes);
+
 
         if (!isValid) {
             return { valid: false, error: 'Invalid signature' };
@@ -147,14 +150,15 @@ export function buildSignatureMessage(payload: QRPayload): string {
     // Canonical order for signature verification
     return JSON.stringify({
         v: payload.v,
-        event_pubkey: payload.event_pubkey,
-        start_ts: payload.start_ts,
-        end_ts: payload.end_ts,
-        zone_code: payload.zone_code,
+        event_id: payload.event_id,
+        asset: payload.asset,
         nonce: payload.nonce,
-        meta: payload.meta || {},
+        issued_at: payload.issued_at,
+        expires_at: payload.expires_at,
+        zone: payload.zone,
     });
 }
+
 
 /**
  * Validate timestamp window
@@ -162,32 +166,43 @@ export function buildSignatureMessage(payload: QRPayload): string {
 export function validateTimeWindow(
     payload: QRPayload
 ): { valid: boolean; status: 'valid' | 'expired' | 'notStarted' } {
-    const now = Date.now();
+    const now = Math.floor(Date.now() / 1000); // Unix seconds
 
-    if (now < payload.start_ts) {
+    if (now < payload.issued_at) {
         return { valid: false, status: 'notStarted' };
     }
 
-    if (now > payload.end_ts) {
+    if (now > payload.expires_at) {
         return { valid: false, status: 'expired' };
     }
 
     return { valid: true, status: 'valid' };
 }
 
+
 /**
- * Check for replay attacks using nonce
+ * Check for replay attacks using nonce and TTL
  */
 export function checkNonceReplay(
     nonce: string,
+    payloadTs: number,
     usedNonces: Set<string>
 ): { valid: boolean; error?: string } {
+    const now = Date.now();
+
+    // 1. Strict TTL check
+    if (now - payloadTs > QR_SCHEMA.maxNonceAge) {
+        return { valid: false, error: 'QR code has expired (TTL exceeded)' };
+    }
+
+    // 2. Duplicate check
     if (usedNonces.has(nonce)) {
         return { valid: false, error: 'Nonce already used - possible replay attack' };
     }
 
     return { valid: true };
 }
+
 
 /**
  * Persistence: Load used nonces from secure storage
@@ -238,6 +253,7 @@ export async function validateQRPayload(
         timeWindow: 'checking',
         location: 'checking',
         duplicate: 'checking',
+        onChain: 'waiting'
     };
 
     // Step 1: Parse and validate schema
@@ -262,12 +278,15 @@ export async function validateQRPayload(
         return { ...result, location: 'checking', duplicate: 'checking', payload };
     }
 
-    // Step 4: Check nonce replay
-    const nonceResult = checkNonceReplay(payload.nonce, usedNonces);
+    // Step 4: Check nonce replay and TTL
+    // We use issued_at for the 5-minute TTL check
+    const nonceResult = checkNonceReplay(payload.nonce, payload.issued_at * 1000, usedNonces);
     if (!nonceResult.valid) {
         return { ...result, duplicate: 'duplicate', location: 'checking', payload };
     }
+
     result.duplicate = 'clear';
+
 
     // Location check is done separately in zone.ts
     result.location = 'checking';

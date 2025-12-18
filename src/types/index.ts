@@ -24,13 +24,13 @@ export interface Event {
 // QR Payload (canonical scanned object)
 export interface QRPayload {
     v: number;
-    event_pubkey: string;
-    start_ts: number;
-    end_ts: number;
-    zone_code: string;
-    nonce: string;
-    meta?: Record<string, string>;
-    sig: string;
+    event_id: string;      // Matches Supabase events.id
+    asset: string;         // Mint address of the attendee asset (NFT)
+    nonce: string;         // Random 128-bit challenge
+    issued_at: number;     // Timestamp (Unix secs)
+    expires_at: number;    // Timestamp (Unix secs)
+    zone: string;          // Human-readable zone string
+    sig: string;           // Ed25519 signature from organizer
 }
 
 // Credential (SBT - Soulbound Token)
@@ -87,7 +87,9 @@ export interface VerificationStatus {
     timeWindow: 'checking' | 'valid' | 'expired' | 'notStarted';
     location: 'checking' | 'valid' | 'mismatch' | 'denied';
     duplicate: 'checking' | 'clear' | 'duplicate';
+    onChain: 'waiting' | 'signing' | 'confirming' | 'finalized' | 'failed';
 }
+
 
 // Settings
 export interface Settings {

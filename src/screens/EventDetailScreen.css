@@ -65,7 +65,42 @@
     background: rgba(0, 0, 0, 0.7);
 }
 
+.hero-actions {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    display: flex;
+    gap: var(--spacing-sm);
+    z-index: 10;
+}
+
+.bookmark-button {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.bookmark-button:hover {
+    background: rgba(0, 0, 0, 0.7);
+    transform: scale(1.05);
+}
+
+.bookmark-button.active {
+    background: var(--color-accent-purple);
+    color: white;
+}
+
 .event-status-badge {
+
     position: absolute;
     bottom: var(--spacing-md);
     right: var(--spacing-md);

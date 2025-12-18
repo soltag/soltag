@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, XCircle, Loader2, Clock, MapPin, Shield, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Loader2, Clock, MapPin, Shield } from 'lucide-react';
 import type { VerificationStatus, QRPayload } from '../types';
 import './VerifyScanScreen.css';
 import { validateQRPayload, loadUsedNonces, recordNonce } from '../services/qrValidator';
 import { verifyZone } from '../services/zone';
 import { mockEvents } from '../data/mockData';
+
 
 export default function VerifyScanScreen() {
     const navigate = useNavigate();
@@ -18,10 +19,12 @@ export default function VerifyScanScreen() {
         signature: 'checking',
         timeWindow: 'checking',
         location: 'checking',
-        duplicate: 'checking'
+        duplicate: 'checking',
+        onChain: 'waiting'
     });
 
     const [usedNonces, setUsedNonces] = useState<Set<string>>(new Set());
+
     const [isNoncesLoaded, setIsNoncesLoaded] = useState(false);
 
     const allPassed =
@@ -44,12 +47,15 @@ export default function VerifyScanScreen() {
         });
     }, []);
 
+    const [errorDetails, setErrorDetails] = useState<string | null>(null);
+
     // Real verification checks
     useEffect(() => {
         let isCancelled = false;
 
         const performVerification = async () => {
             if (!qrRawData || !isNoncesLoaded) return;
+            setErrorDetails(null);
 
             // 1. Validate QR (Signature, Time, Nonce)
             const trustedKeys = mockEvents.map(e => e.event_pubkey);
@@ -64,7 +70,13 @@ export default function VerifyScanScreen() {
                 duplicate: result.duplicate
             }));
 
+            // Surface specific errors if failed
+            if (result.signature === 'invalid') setErrorDetails('QR signature verification failed. The code may be tampered.');
+            else if (result.timeWindow === 'expired') setErrorDetails('The check-in window for this event has expired.');
+            else if (result.duplicate === 'duplicate') setErrorDetails('This QR code has already been used.');
+
             // 2. Validate Location (Zone)
+
             if (result.payload) {
                 const zoneResult = await verifyZone([result.payload.zone_code]);
                 if (isCancelled) return;
@@ -110,9 +122,6 @@ export default function VerifyScanScreen() {
             case 'mismatch':
             case 'duplicate':
                 return <XCircle size={20} className="status-icon error" />;
-            case 'notStarted':
-            case 'denied':
-                return <AlertTriangle size={20} className="status-icon warning" />;
             default:
                 return <Loader2 size={20} className="status-icon checking animate-spin" />;
         }
@@ -211,9 +220,13 @@ export default function VerifyScanScreen() {
                 {hasFailed && (
                     <div className="verify-error animate-fade-in">
                         <XCircle size={24} />
-                        <span>Verification failed — contact the event organizer</span>
+                        <div className="error-text">
+                            <span>Verification failed</span>
+                            {errorDetails && <p className="error-details">{errorDetails}</p>}
+                        </div>
                     </div>
                 )}
+
 
                 {/* Privacy notice */}
                 <p className="privacy-note">
@@ -234,7 +247,7 @@ export default function VerifyScanScreen() {
                     onClick={handleProceed}
                     disabled={!allPassed}
                 >
-                    Proceed
+                    Proceed to Confirm
                 </button>
             </div>
         </div>

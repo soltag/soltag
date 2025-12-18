@@ -1,28 +1,53 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Calendar, Clock, User, Shield, ExternalLink, QrCode } from 'lucide-react';
-import { ledgerService } from '../services/ledgerService';
+import { getEvents, toggleBookmark, getBookmarkStatus } from '../services/api';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { formatDate, formatTime, getEventStatus } from '../data/mockData';
+
+
 import type { Event } from '../types';
 import './EventDetailScreen.css';
 
 export default function EventDetailScreen() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { publicKey } = useWallet();
+    const walletAddress = publicKey?.toBase58();
 
     const [event, setEvent] = useState<Event | null>(null);
+    const [isBookmarked, setIsBookmarked] = useState(false);
     const [loading, setLoading] = useState(true);
+
 
     useEffect(() => {
         const loadEvent = async () => {
             if (!id) return;
-            const events = await ledgerService.getEvents();
+            const events = await getEvents();
             const found = events.find(e => e.id === id);
             setEvent(found || null);
+
+            if (walletAddress) {
+                const bookmarked = await getBookmarkStatus(walletAddress, id);
+                setIsBookmarked(bookmarked);
+            }
+
             setLoading(false);
         };
         loadEvent();
-    }, [id]);
+    }, [id, walletAddress]);
+
+    const handleToggleBookmark = async () => {
+        if (!walletAddress || !id) return;
+        try {
+            const newState = await toggleBookmark(walletAddress, id);
+            setIsBookmarked(newState);
+        } catch (error) {
+            console.error('Failed to toggle bookmark:', error);
+        }
+    };
+
+
 
     if (loading) {
         return (
@@ -66,10 +91,19 @@ export default function EventDetailScreen() {
                 <button className="back-button" onClick={() => navigate(-1)}>
                     <ArrowLeft size={24} />
                 </button>
+                <div className="hero-actions">
+                    <button
+                        className={`bookmark-button ${isBookmarked ? 'active' : ''}`}
+                        onClick={handleToggleBookmark}
+                    >
+                        <Shield size={20} fill={isBookmarked ? "currentColor" : "none"} />
+                    </button>
+                </div>
                 <div className={`event-status-badge ${status}`}>
                     {status === 'active' ? 'Live Now' : status === 'upcoming' ? 'Upcoming' : 'Ended'}
                 </div>
             </div>
+
 
             <div className="event-detail-content animate-slide-up">
                 <h1 className="event-detail-title">{event.name}</h1>
