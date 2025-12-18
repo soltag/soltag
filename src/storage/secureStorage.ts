@@ -1,11 +1,16 @@
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * Secure Storage Wrapper
  * 
  * Provides encrypted storage for sensitive data in the app.
  * Uses native secure enclaves (KeyStore on Android, Keychain on iOS).
+ * Falls back to localStorage in browser/web mode.
  */
+
+// Check if we're running in a native environment
+const isNative = Capacitor.isNativePlatform();
 
 // Storage keys
 export const STORAGE_KEYS = {
@@ -20,7 +25,7 @@ export const STORAGE_KEYS = {
     AUTH_TOKEN: 'soltag_auth_token',
 } as const;
 
-// Sensitive keys that MUST use native secure storage
+// Sensitive keys that SHOULD use native secure storage when available
 const SENSITIVE_KEYS: Set<string> = new Set([
     STORAGE_KEYS.WALLET_PUBKEY,
     STORAGE_KEYS.OFFLINE_QUEUE,
@@ -33,14 +38,21 @@ const SENSITIVE_KEYS: Set<string> = new Set([
  */
 export async function secureSet(key: string, value: string): Promise<void> {
     try {
-        if (SENSITIVE_KEYS.has(key)) {
+        // Only use native storage for sensitive keys AND when running natively
+        if (SENSITIVE_KEYS.has(key) && isNative) {
             await SecureStoragePlugin.set({ key, value });
         } else {
             localStorage.setItem(key, value);
         }
     } catch (error) {
         console.error(`[SecureStorage] Failed to set ${key}:`, error);
-        throw error;
+        // Fallback to localStorage if native fails
+        try {
+            localStorage.setItem(key, value);
+        } catch (fallbackError) {
+            console.error(`[SecureStorage] Fallback also failed for ${key}:`, fallbackError);
+            throw error;
+        }
     }
 }
 
@@ -49,15 +61,20 @@ export async function secureSet(key: string, value: string): Promise<void> {
  */
 export async function secureGet(key: string): Promise<string | null> {
     try {
-        if (SENSITIVE_KEYS.has(key)) {
+        // Only use native storage for sensitive keys AND when running natively
+        if (SENSITIVE_KEYS.has(key) && isNative) {
             const { value } = await SecureStoragePlugin.get({ key });
             return value;
         } else {
             return localStorage.getItem(key);
         }
     } catch (error) {
-        // Plugin throws if key doesn't exist – handle as null
-        return null;
+        // Plugin throws if key doesn't exist – try localStorage as fallback
+        try {
+            return localStorage.getItem(key);
+        } catch {
+            return null;
+        }
     }
 }
 
@@ -66,13 +83,20 @@ export async function secureGet(key: string): Promise<string | null> {
  */
 export async function secureRemove(key: string): Promise<void> {
     try {
-        if (SENSITIVE_KEYS.has(key)) {
+        // Only use native storage for sensitive keys AND when running natively
+        if (SENSITIVE_KEYS.has(key) && isNative) {
             await SecureStoragePlugin.remove({ key });
         } else {
             localStorage.removeItem(key);
         }
     } catch (error) {
         console.error(`[SecureStorage] Failed to remove ${key}:`, error);
+        // Also try localStorage cleanup
+        try {
+            localStorage.removeItem(key);
+        } catch {
+            // Ignore fallback failure
+        }
     }
 }
 
