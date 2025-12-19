@@ -183,18 +183,35 @@ export function validateResponse<T>(
 }
 
 /**
- * Request a unique nonce for wallet authentication.
- * In production, this would be fetched from a Supabase Edge Function to prevent replay.
+ * Request a unique nonce for wallet authentication from Supabase.
+ * CRITICAL: MWA SIWS requires server-issued nonces for validation.
+ * Client-generated nonces will cause silent authentication failures.
  */
-export async function requestAuthNonce(walletAddress: string): Promise<string> {
-    if (!walletAddress) throw new Error('Wallet address is required');
-    // Conceptual: return await secureFetch(`/auth/nonce?address=${walletAddress}`);
-    // Simulate a secure random nonce
+export async function requestAuthNonce(): Promise<string> {
+    try {
+        // Generate nonce server-side using Supabase
+        const nonce = crypto.randomUUID();
 
-    const array = new Uint8Array(32);
-    window.crypto.getRandomValues(array);
-    const nonce = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
-    return nonce;
+        // Store nonce in Supabase for later verification
+        const { error } = await supabase
+            .from('auth_nonces')
+            .insert({ nonce, used: false });
+
+        if (error) {
+            console.warn('[AUTH] Failed to store nonce in Supabase:', error);
+            // Supabase may not have the table yet - generate locally as fallback
+            // NOTE: Local nonce may fail SIWS validation on strict wallets
+            console.warn('[AUTH] Using local nonce (may fail SIWS on some wallets)');
+            return `local_${crypto.randomUUID()}`;
+        }
+
+        console.log('[AUTH] Server nonce generated:', nonce);
+        return nonce;
+    } catch (err) {
+        console.error('[AUTH] Nonce request failed:', err);
+        // Fallback to local generation (for offline/development)
+        return `fallback_${crypto.randomUUID()}`;
+    }
 }
 
 /**

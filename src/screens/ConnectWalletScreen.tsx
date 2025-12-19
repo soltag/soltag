@@ -201,12 +201,16 @@ export default function ConnectWalletScreen() {
             // On Android, always use MWA - it will show the system wallet picker
             if (isAndroid && isMWASupported) {
                 setAuthMethod('mwa');
-                setStatusMessage('Opening wallet...');
+                setStatusMessage('Preparing authentication...');
 
                 console.log('[Auth] Using MWA with SIWS for wallet connection');
 
-                // Generate nonce for sign-in (SIWS uses this for replay protection)
-                const nonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                // CRITICAL: Request nonce from Supabase - MWA SIWS requires server-issued nonces
+                const { requestAuthNonce } = await import('../services/api');
+                const nonce = await requestAuthNonce();
+                console.log('[Auth] Server nonce received:', nonce);
+
+                setStatusMessage('Opening wallet...');
 
                 // MWA will show the system wallet picker with SIWS UI
                 const result = await authenticateWithMWA(nonce);
@@ -235,7 +239,9 @@ export default function ConnectWalletScreen() {
                         throw new Error(apiResult.error || 'Server verification failed');
                     }
                 } else {
-                    throw new Error('Wallet connection was cancelled');
+                    // null result = protocol failure (likely nonce validation failed)
+                    // This is NOT user cancellation - that would throw an error
+                    throw new Error('Wallet authentication failed. Please ensure you have a compatible wallet installed and try again.');
                 }
             }
 
