@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HelpCircle, Loader2, AlertCircle, User, ExternalLink } from 'lucide-react';
-import { useWallet, Wallet as WalletType } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { HelpCircle, Loader2, AlertCircle, User } from 'lucide-react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { signInWithWallet } from '../services/api';
 import {
     isMWAAvailable,
@@ -14,6 +13,7 @@ import {
     handleSignMessageCallback,
     getPhantomPublicKey,
     isAndroidDevice,
+    connectToPhantom,
 } from '../services/phantomDeeplink';
 
 import './ConnectWalletScreen.css';
@@ -22,14 +22,44 @@ import './ConnectWalletScreen.css';
 const PENDING_NONCE_KEY = 'soltag_pending_nonce';
 const AUTH_STEP_KEY = 'soltag_auth_step';
 
+// Wallet configurations matching the design - using original icons from logos folder
+const WALLET_OPTIONS = [
+    {
+        id: 'phantom',
+        name: 'Phantom',
+        description: 'Full MWA support on Android',
+        icon: '/wallet-phantom.svg',
+    },
+    {
+        id: 'solflare',
+        name: 'Solflare',
+        description: 'Full MWA support on Android',
+        icon: '/wallet-solflare.svg',
+    },
+    {
+        id: 'ultimate',
+        name: 'Ultimate',
+        description: 'Saga-native wallet',
+        icon: '/wallet-ultimate.svg',
+    },
+    {
+        id: 'backpack',
+        name: 'Backpack',
+        description: 'Full MWA support',
+        icon: '/wallet-backpack.svg',
+    },
+    {
+        id: 'glow',
+        name: 'Glow',
+        description: 'Full MWA support',
+        icon: '/wallet-glow.png',
+    },
+];
+
 export default function ConnectWalletScreen() {
     const navigate = useNavigate();
     const location = useLocation();
     const { connected, publicKey, signMessage, connecting, wallets, select } = useWallet();
-    useWalletModal(); // Keep provider active but don't use setVisible
-
-    // We'll use a local ref or state if needed for pending, but currently redundant
-    // because App root handles auth navigation.
 
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
@@ -47,7 +77,6 @@ export default function ConnectWalletScreen() {
             const search = location.search;
             const fullUrl = window.location.href;
 
-            // Check if this is a Phantom callback (either in search or full URL)
             if (!fullUrl.includes('soltag://phantom/') && !search.includes('data=')) {
                 return;
             }
@@ -69,7 +98,6 @@ export default function ConnectWalletScreen() {
 
                     setStatusMessage('Requesting signature via Phantom...');
 
-                    // Small delay for UI smoothness
                     setTimeout(() => {
                         signMessageWithPhantom(`Sign this message to authenticate with Soltag: ${nonce}`);
                     }, 800);
@@ -105,7 +133,6 @@ export default function ConnectWalletScreen() {
             } finally {
                 setIsAuthenticating(false);
                 setStatusMessage('');
-                // Use history API to clean URL without triggerring re-navigation if possible
                 window.history.replaceState({}, '', '/connect');
             }
         };
@@ -146,11 +173,10 @@ export default function ConnectWalletScreen() {
         }
     }, [connected, publicKey, signMessage, isAuthenticating, navigate, login]);
 
-    // Trigger adapter auth when connected and pending
+    // Trigger adapter auth when connected
     useEffect(() => {
         const checkConnection = async () => {
             if (connected && publicKey && !isMWASupported && !isAndroid && !isAuthenticating) {
-                // Check if we already have a session to avoid double-triggers
                 const sessionToken = await useAuthStore.getState().authToken;
                 if (!sessionToken) {
                     performAdapterAuth();
@@ -165,22 +191,55 @@ export default function ConnectWalletScreen() {
         navigate('/home');
     }, [navigate, login]);
 
-    // Handle individual wallet selection
-    const handleWalletSelect = useCallback(async (wallet: WalletType) => {
+    // Handle wallet selection - try native first, then deep-link
+    const handleWalletSelect = useCallback(async (walletId: string) => {
         try {
             setAuthError(null);
-            select(wallet.adapter.name);
-            // The useEffect for connected will handle the auth flow
+            setIsAuthenticating(true);
+            setStatusMessage('Connecting...');
+
+            // Check if wallet adapter is available for this wallet
+            const adapterWallet = wallets.find(
+                w => w.adapter.name.toLowerCase().includes(walletId.toLowerCase()) &&
+                    (w.readyState === 'Installed' || w.readyState === 'Loadable')
+            );
+
+            if (adapterWallet) {
+                // Use wallet adapter
+                select(adapterWallet.adapter.name);
+                setIsAuthenticating(false);
+            } else if (walletId === 'phantom' && isAndroid) {
+                // Use Phantom deep-link for Android
+                setAuthMethod('deeplink');
+                setStatusMessage('Opening Phantom...');
+                connectToPhantom();
+            } else {
+                // Show message that wallet is not installed
+                setAuthError(`${walletId.charAt(0).toUpperCase() + walletId.slice(1)} wallet not detected. Please install it first.`);
+                setIsAuthenticating(false);
+            }
         } catch (err) {
             console.error('[Auth] Wallet selection failed:', err);
-            setAuthError('Failed to select wallet');
+            setAuthError('Failed to connect wallet');
+            setIsAuthenticating(false);
         }
-    }, [select]);
+    }, [wallets, select, isAndroid]);
 
     const isLoading = connecting || isAuthenticating;
 
     return (
         <div className="connect-wallet-screen">
+            {/* Decorative stars */}
+            <div className="stars-decoration">
+                {[...Array(20)].map((_, i) => (
+                    <span key={i} className="star" style={{
+                        left: `${Math.random() * 100}%`,
+                        top: `${Math.random() * 100}%`,
+                        animationDelay: `${Math.random() * 3}s`
+                    }}>✦</span>
+                ))}
+            </div>
+
             <div className="connect-content animate-slide-up">
                 <h1 className="connect-title">Connect your wallet</h1>
                 <p className="connect-subtitle">
@@ -201,42 +260,32 @@ export default function ConnectWalletScreen() {
                         </div>
                     ) : (
                         <div className="wallet-options">
-                            {/* Multi-Wallet Selector */}
+                            {/* Wallet List */}
                             <div className="wallet-list">
-                                {wallets.filter(w => w.readyState === 'Installed' || w.readyState === 'Loadable').length > 0 ? (
-                                    wallets
-                                        .filter(w => w.readyState === 'Installed' || w.readyState === 'Loadable')
-                                        .map((wallet) => (
-                                            <button
-                                                key={wallet.adapter.name}
-                                                className="wallet-option-btn"
-                                                onClick={() => handleWalletSelect(wallet)}
-                                                disabled={isLoading}
-                                            >
-                                                <img
-                                                    src={wallet.adapter.icon}
-                                                    alt={wallet.adapter.name}
-                                                    className="wallet-icon"
-                                                />
-                                                <span>{wallet.adapter.name}</span>
-                                                <ExternalLink size={16} className="wallet-arrow" />
-                                            </button>
-                                        ))
-                                ) : (
-                                    <div className="no-wallets-message">
-                                        <p>No wallets detected.</p>
-                                        <p className="small">Install Phantom, Solflare, or Backpack to continue.</p>
-                                        <a
-                                            href="https://phantom.app/download"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="install-wallet-link"
-                                        >
-                                            <ExternalLink size={16} />
-                                            Install Phantom
-                                        </a>
-                                    </div>
-                                )}
+                                {WALLET_OPTIONS.map((wallet) => (
+                                    <button
+                                        key={wallet.id}
+                                        className="wallet-option-btn"
+                                        onClick={() => handleWalletSelect(wallet.id)}
+                                        disabled={isLoading}
+                                    >
+                                        <div className="wallet-icon-wrapper">
+                                            <img
+                                                src={wallet.icon}
+                                                alt={wallet.name}
+                                                className="wallet-icon"
+                                                onError={(e) => {
+                                                    // Fallback for missing icons
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="wallet-info">
+                                            <span className="wallet-name">{wallet.name}</span>
+                                            <span className="wallet-description">{wallet.description}</span>
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
 
                             {/* Guest login */}
@@ -260,17 +309,18 @@ export default function ConnectWalletScreen() {
                 )}
 
                 <div className="security-note">
-                    <p>
-                        {isAndroid
-                            ? "Optimized for Solana Seeker & Phantom"
-                            : "Secured by Solana Mobile Stack"}
-                    </p>
+                    <p>Optimized for Solana Seeker & Phantom</p>
                 </div>
 
                 <button className="help-link" onClick={() => navigate('/help')}>
                     <HelpCircle size={16} />
                     <span>How wallets work</span>
                 </button>
+            </div>
+
+            {/* Bottom decoration */}
+            <div className="bottom-decoration">
+                <span className="sparkle">✦</span>
             </div>
         </div>
     );
