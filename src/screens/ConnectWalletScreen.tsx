@@ -5,6 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { signInWithWallet } from '../services/api';
 import {
     isMWAAvailable,
+    authenticateWithMWA,
 } from '../services/mwaService';
 import { useAuthStore } from '../stores/authStore';
 import {
@@ -191,39 +192,80 @@ export default function ConnectWalletScreen() {
         navigate('/home');
     }, [navigate, login]);
 
-    // Handle wallet selection - try native first, then deep-link
+    // Handle wallet selection - use MWA on Android, wallet adapter on desktop
     const handleWalletSelect = useCallback(async (walletId: string) => {
         try {
             setAuthError(null);
             setIsAuthenticating(true);
-            setStatusMessage('Connecting...');
 
-            // Check if wallet adapter is available for this wallet
+            // On Android, always use MWA - it will show the system wallet picker
+            if (isAndroid && isMWASupported) {
+                setAuthMethod('mwa');
+                setStatusMessage('Opening wallet...');
+
+                console.log('[Auth] Using MWA with SIWS for wallet connection');
+
+                // Generate nonce for sign-in (SIWS uses this for replay protection)
+                const nonce = `soltag_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+                // MWA will show the system wallet picker with SIWS UI
+                const result = await authenticateWithMWA(nonce);
+
+                if (result) {
+                    console.log('[Auth] MWA SIWS authentication successful:', result.publicKey);
+                    setStatusMessage('Verifying...');
+
+                    // Verify with backend (uses SIWS signed message)
+                    const apiResult = await signInWithWallet(result.publicKey, result.signature, nonce);
+
+                    if (apiResult.ok) {
+                        // Create/update profile in Supabase
+                        try {
+                            const { upsertProfile } = await import('../services/api');
+                            await upsertProfile({ wallet_address: result.publicKey });
+                            console.log('[Auth] Profile created/updated for:', result.publicKey);
+                        } catch (profileError) {
+                            console.warn('[Auth] Profile upsert failed (non-fatal):', profileError);
+                        }
+
+                        await login(result.publicKey, 'Explorer', apiResult.token || result.authToken);
+                        navigate('/home');
+                        return;
+                    } else {
+                        throw new Error(apiResult.error || 'Server verification failed');
+                    }
+                } else {
+                    throw new Error('Wallet connection was cancelled');
+                }
+            }
+
+            // On desktop/iOS, try wallet adapter
             const adapterWallet = wallets.find(
                 w => w.adapter.name.toLowerCase().includes(walletId.toLowerCase()) &&
                     (w.readyState === 'Installed' || w.readyState === 'Loadable')
             );
 
             if (adapterWallet) {
-                // Use wallet adapter
+                setStatusMessage('Connecting via wallet extension...');
                 select(adapterWallet.adapter.name);
                 setIsAuthenticating(false);
-            } else if (walletId === 'phantom' && isAndroid) {
-                // Use Phantom deep-link for Android
-                setAuthMethod('deeplink');
-                setStatusMessage('Opening Phantom...');
-                connectToPhantom();
             } else {
-                // Show message that wallet is not installed
-                setAuthError(`${walletId.charAt(0).toUpperCase() + walletId.slice(1)} wallet not detected. Please install it first.`);
-                setIsAuthenticating(false);
+                // Fallback: Try Phantom deep-link on Android if MWA failed
+                if (walletId === 'phantom' && isAndroid) {
+                    setAuthMethod('deeplink');
+                    setStatusMessage('Opening Phantom...');
+                    connectToPhantom();
+                } else {
+                    setAuthError(`${walletId.charAt(0).toUpperCase() + walletId.slice(1)} wallet not detected. Please install a Solana wallet.`);
+                    setIsAuthenticating(false);
+                }
             }
         } catch (err) {
             console.error('[Auth] Wallet selection failed:', err);
-            setAuthError('Failed to connect wallet');
+            setAuthError(err instanceof Error ? err.message : 'Failed to connect wallet');
             setIsAuthenticating(false);
         }
-    }, [wallets, select, isAndroid]);
+    }, [wallets, select, isAndroid, isMWASupported, login, navigate]);
 
     const isLoading = connecting || isAuthenticating;
 
